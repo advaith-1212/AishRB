@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - Resume Builder</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        /* Toast */
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        .toast {
+            padding: 12px 20px; border-radius: 8px; color: white; margin-bottom: 8px;
+            font-size: 0.9em; animation: toast-in 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .toast-success { background: #27ae60; }
+        .toast-error { background: #e74c3c; }
+        .toast-info { background: #3498db; }
+        .toast-warning { background: #f39c12; }
+        .toast.fade-out { animation: toast-out 0.3s ease-in forwards; }
+        @keyframes toast-in { from { opacity:0; transform:translateX(60px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes toast-out { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(60px); } }
+
+        /* ---- Buttons ---- */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 10px 20px; border: none; border-radius: 8px;
+            font-size: 0.92em; cursor: pointer; font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-primary:disabled { background: #93b4f5; cursor: not-allowed; }
+        .btn-secondary { background: #f0f2f5; color: #333; border: 1px solid #d1d5db; }
+        .btn-secondary:hover { background: #e5e7eb; }
+        .btn-success { background: #059669; color: white; }
+        .btn-success:hover { background: #047857; }
+        .btn-ghost { background: transparent; color: #2563eb; }
+        .btn-ghost:hover { background: #eff6ff; }
+
+        /* ---- Upload Step ---- */
+        .upload-container {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 20px;
+        }
+        .upload-card {
+            background: white; border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            padding: 48px 44px; width: 100%; max-width: 560px;
+        }
+        .upload-card h1 { font-size: 1.6em; margin-bottom: 6px; }
+        .upload-card .subtitle { color: #6b7280; font-size: 0.95em; margin-bottom: 28px; line-height: 1.5; }
+
+        /* Drop zone */
+        .drop-zone {
+            border: 2px dashed #d1d5db; border-radius: 12px;
+            padding: 40px 20px; text-align: center;
+            cursor: pointer; transition: all 0.25s;
+            background: #fafbfc;
+        }
+        .drop-zone:hover { border-color: #2563eb; background: #eff6ff; }
+        .drop-zone.drag-over { border-color: #2563eb; background: #dbeafe; transform: scale(1.01); }
+        .drop-zone-icon { font-size: 2.4em; margin-bottom: 12px; opacity: 0.5; }
+        .drop-zone-text { font-size: 0.95em; color: #6b7280; }
+        .drop-zone-text strong { color: #2563eb; }
+        .drop-zone input[type="file"] { display: none; }
+
+        /* File info chip */
+        .file-info {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0;
+            border-radius: 10px; margin-top: 16px;
+        }
+        .file-info-icon { font-size: 1.5em; }
+        .file-info-details { flex: 1; }
+        .file-info-name { font-weight: 600; font-size: 0.9em; }
+        .file-info-size { font-size: 0.8em; color: #6b7280; }
+        .file-info-remove {
+            background: none; border: none; color: #ef4444;
+            cursor: pointer; font-size: 1.1em; padding: 4px;
+        }
+
+        /* AI settings */
+        .ai-settings {
+            margin-top: 16px; padding: 14px; background: #f8f9fa;
+            border-radius: 10px; border: 1px solid #e5e7eb;
+        }
+        .ai-settings summary {
+            cursor: pointer; font-size: 0.88em; font-weight: 600; color: #6b7280;
+        }
+        .ai-settings label {
+            display: block; font-weight: 600; font-size: 0.82em;
+            color: #6b7280; margin: 12px 0 4px;
+        }
+        .ai-settings label:first-of-type { margin-top: 14px; }
+        .ai-settings select, .ai-settings input[type="text"] {
+            width: 100%; padding: 8px 10px; border: 1px solid #d1d5db;
+            border-radius: 6px; font-size: 0.88em;
+        }
+        .ai-settings select:focus, .ai-settings input[type="text"]:focus {
+            outline: none; border-color: #2563eb;
+        }
+        .hint { font-size: 0.78em; color: #9ca3af; margin-top: 4px; }
+
+        /* AI error panel */
+        .ai-error-panel {
+            display: none; margin-top: 16px; padding: 14px 16px;
+            background: #fff3cd; border: 1px solid #ffc107; border-radius: 10px;
+        }
+
+        /* ---- Parsing Progress Step ---- */
+        .parsing-container {
+            display: none; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 20px;
+        }
+        .parsing-card {
+            background: white; border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            padding: 48px 52px; width: 100%; max-width: 480px;
+            text-align: center;
+        }
+        .parsing-card h2 { font-size: 1.3em; margin-bottom: 8px; }
+        .parsing-card .parsing-sub { color: #6b7280; font-size: 0.9em; margin-bottom: 36px; }
+        .progress-steps { text-align: left; margin: 0 auto; max-width: 320px; }
+        .progress-step {
+            display: flex; align-items: center; gap: 14px;
+            padding: 12px 0; position: relative;
+            opacity: 0.4; transition: all 0.4s ease;
+        }
+        .progress-step.active { opacity: 1; }
+        .progress-step.done { opacity: 1; }
+        .step-indicator {
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8em; font-weight: 700; flex-shrink: 0;
+            background: #e5e7eb; color: #9ca3af;
+            transition: all 0.3s;
+        }
+        .progress-step.active .step-indicator {
+            background: #dbeafe; color: #2563eb;
+            animation: pulse-ring 1.2s ease infinite;
+        }
+        .progress-step.done .step-indicator { background: #d1fae5; color: #059669; }
+        @keyframes pulse-ring {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.3); }
+            50% { box-shadow: 0 0 0 8px rgba(37,99,235,0); }
+        }
+        .step-text { font-size: 0.92em; font-weight: 500; }
+        .progress-step.active .step-text { color: #1e40af; font-weight: 600; }
+        .progress-step.done .step-text { color: #059669; }
+        .step-connector {
+            position: absolute; left: 15px; top: 44px;
+            width: 2px; height: 12px; background: #e5e7eb;
+        }
+        .progress-step.done .step-connector { background: #a7f3d0; }
+
+        /* ---- Review Step ---- */
+        .review-container { display: none; flex-direction: column; height: 100vh; }
+        .review-header {
+            padding: 10px 20px; background: white; border-bottom: 1px solid #e5e7eb;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+        }
+        .review-header h2 { font-size: 1.05em; }
+        .view-toggle {
+            display: inline-flex; background: #f0f2f5; border-radius: 8px;
+            padding: 3px; gap: 2px;
+        }
+        .view-toggle-btn {
+            padding: 6px 14px; border: none; border-radius: 6px;
+            font-size: 0.82em; font-weight: 600; cursor: pointer;
+            background: transparent; color: #6b7280; transition: all 0.2s;
+        }
+        .view-toggle-btn.active { background: white; color: #1e40af; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+        /* Confidence bar */
+        .confidence-bar {
+            padding: 8px 20px; background: #fff; border-bottom: 1px solid #eee;
+            font-size: 0.82em; flex-shrink: 0; display: none;
+        }
+        .confidence-bar .overall { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+        .score-pill {
+            display: inline-block; padding: 2px 10px; border-radius: 12px;
+            font-weight: 700; font-size: 0.95em;
+        }
+        .score-high { background: #d1fae5; color: #065f46; }
+        .score-med  { background: #fef3c7; color: #92400e; }
+        .score-low  { background: #fee2e2; color: #991b1b; }
+        .confidence-issues { display: flex; flex-wrap: wrap; gap: 6px; }
+        .issue-chip { padding: 2px 8px; border-radius: 4px; font-size: 0.82em; }
+        .chip-missing { background: #fee2e2; color: #991b1b; }
+        .chip-review  { background: #fef3c7; color: #92400e; }
+
+        /* Review body */
+        .review-body { display: flex; flex: 1; overflow: hidden; }
+        .review-left { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #e5e7eb; }
+        .review-right { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Structured view */
+        #structured-view { flex: 1; overflow-y: auto; padding: 16px 20px; background: #f8f9fb; }
+        #yaml-view { flex: 1; display: none; flex-direction: column; }
+        #yaml-editor { flex: 1; font-size: 14px; }
+
+        /* Section cards */
+        .section-card {
+            background: white; border-radius: 10px; margin-bottom: 14px;
+            border: 1px solid #e5e7eb; overflow: hidden;
+        }
+        .section-card-header {
+            padding: 10px 16px; background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex; align-items: center; justify-content: space-between;
+            cursor: pointer; user-select: none;
+        }
+        .section-card-header h3 {
+            font-size: 0.88em; text-transform: uppercase; letter-spacing: 0.04em;
+            color: #475569; display: flex; align-items: center; gap: 8px;
+        }
+        .section-card-header .chevron {
+            font-size: 0.7em; color: #9ca3af; transition: transform 0.2s;
+        }
+        .section-card.collapsed .section-card-body { display: none; }
+        .section-card.collapsed .chevron { transform: rotate(-90deg); }
+        .section-card-body { padding: 14px 16px; }
+        .section-count { font-size: 0.75em; color: #9ca3af; font-weight: 400; }
+
+        /* Entry cards (within sections) */
+        .entry-card {
+            background: #fafbfc; border: 1px solid #f0f1f3; border-radius: 8px;
+            padding: 12px 14px; margin-bottom: 10px;
+        }
+        .entry-card:last-child { margin-bottom: 0; }
+        .field-row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+        .field-row:last-child { margin-bottom: 0; }
+        .field-group { flex: 1; min-width: 140px; }
+        .field-group.wide { flex: 2; min-width: 240px; }
+        .field-label {
+            font-size: 0.72em; font-weight: 600; color: #9ca3af;
+            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
+        }
+        .field-input {
+            width: 100%; padding: 6px 10px; border: 1px solid #e5e7eb;
+            border-radius: 6px; font-size: 0.88em; background: white;
+            transition: border-color 0.2s;
+        }
+        .field-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+        textarea.field-input { resize: vertical; min-height: 40px; font-family: inherit; line-height: 1.4; }
+
+        /* Skill rows */
+        .skill-row {
+            display: flex; gap: 8px; align-items: center;
+            padding: 6px 0; border-bottom: 1px solid #f0f1f3;
+        }
+        .skill-row:last-child { border-bottom: none; }
+        .skill-category {
+            font-weight: 600; font-size: 0.85em; color: #475569;
+            min-width: 120px; flex-shrink: 0;
+        }
+        .skill-items { font-size: 0.85em; color: #6b7280; flex: 1; }
+        .skill-category-input { width: 140px; flex-shrink: 0; }
+        .skill-items-input { flex: 1; }
+
+        /* Bullets */
+        .bullet-list { margin-top: 8px; }
+        .bullet-item {
+            display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px;
+        }
+        .bullet-marker {
+            color: #9ca3af; font-size: 0.7em; margin-top: 8px; flex-shrink: 0;
+        }
+        .bullet-text {
+            flex: 1; padding: 5px 8px; border: 1px solid transparent;
+            border-radius: 4px; font-size: 0.85em; line-height: 1.4;
+            background: transparent; resize: none; font-family: inherit;
+            min-height: 28px; overflow: hidden;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .bullet-text:hover { border-color: #e5e7eb; background: white; }
+        .bullet-text:focus {
+            outline: none; border-color: #2563eb; background: white;
+            box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+        }
+        .bullet-actions { display: flex; gap: 2px; align-items: center; opacity: 0; transition: opacity 0.2s; }
+        .bullet-item:hover .bullet-actions { opacity: 1; }
+        .bullet-action-btn {
+            background: none; border: none; cursor: pointer;
+            color: #9ca3af; font-size: 0.8em; padding: 2px 4px;
+        }
+        .bullet-action-btn:hover { color: #ef4444; }
+        .add-bullet-btn {
+            background: none; border: 1px dashed #d1d5db; border-radius: 6px;
+            padding: 6px 12px; font-size: 0.8em; color: #9ca3af;
+            cursor: pointer; width: 100%; margin-top: 4px;
+            transition: all 0.2s;
+        }
+        .add-bullet-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+
+        /* Add entry button */
+        .add-entry-btn {
+            background: none; border: 1px dashed #d1d5db; border-radius: 8px;
+            padding: 10px; font-size: 0.85em; color: #9ca3af;
+            cursor: pointer; width: 100%; margin-top: 8px;
+            transition: all 0.2s;
+        }
+        .add-entry-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+
+        /* Right panel tabs */
+        .right-tab-bar {
+            display: flex; background: #f8f9fa; border-bottom: 1px solid #e5e7eb;
+            padding: 0 16px; flex-shrink: 0;
+        }
+        .right-tab-btn {
+            padding: 10px 16px; border: none; background: none;
+            font-size: 0.82em; font-weight: 600; color: #6b7280;
+            cursor: pointer; border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .right-tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .right-tab-btn:hover { color: #1e40af; }
+        #pdf-viewer, #preview-viewer { flex: 1; overflow: hidden; }
+        #pdf-viewer iframe, #preview-viewer iframe {
+            width: 100%; height: 100%; border: none;
+        }
+
+        /* Bottom bar (section search, AI change) */
+        .bottom-bar {
+            padding: 8px 16px; background: #f8f9fa; border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+        .bottom-bar-row { display: flex; gap: 8px; align-items: center; }
+        .bottom-bar-label { font-size: 0.82em; color: #6b7280; white-space: nowrap; }
+        .bottom-bar-input {
+            flex: 1; padding: 7px 12px; font-size: 0.85em;
+            border: 1px solid #d1d5db; border-radius: 6px;
+        }
+        .bottom-bar-input:focus { outline: none; border-color: #2563eb; }
+
+        /* Review footer */
+        .review-footer {
+            padding: 12px 20px; background: white; border-top: 1px solid #e5e7eb;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+            border-radius: 50%; animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center; padding: 40px 20px; color: #9ca3af;
+            font-size: 0.9em;
+        }
+
+        /* Remove entry btn */
+        .remove-entry-btn {
+            position: absolute; top: 8px; right: 8px;
+            background: none; border: none; color: #d1d5db;
+            cursor: pointer; font-size: 0.9em; padding: 2px 6px;
+            border-radius: 4px; transition: all 0.2s;
+        }
+        .remove-entry-btn:hover { color: #ef4444; background: #fef2f2; }
+        .entry-card { position: relative; }
+
+        /* Personal info grid */
+        .personal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .personal-grid .field-group.full { grid-column: 1 / -1; }
+    </style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<!-- ========== Step 1: Upload ========== -->
+<div id="upload-step" class="upload-container">
+    <div class="upload-card">
+        <h1>Welcome, {{ user.name }}!</h1>
+        <div class="subtitle">Upload your resume PDF and we'll extract everything automatically. You can review and correct each field before continuing.</div>
+
+        <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone-icon">&#128196;</div>
+            <div class="drop-zone-text"><strong>Click to browse</strong> or drag and drop your PDF here</div>
+            <input type="file" id="resume-pdf" accept=".pdf">
+        </div>
+
+        <div id="file-info" style="display:none;" class="file-info">
+            <span class="file-info-icon">&#128196;</span>
+            <div class="file-info-details">
+                <div class="file-info-name" id="file-name"></div>
+                <div class="file-info-size" id="file-size"></div>
+            </div>
+            <button class="file-info-remove" id="file-remove" title="Remove file">&#10005;</button>
+        </div>
+
+        <div id="parse-options" style="display:none; margin-top:16px;">
+            <details class="ai-settings" id="ai-settings">
+                <summary>Have an AI API key? (optional &mdash; improves accuracy)</summary>
+                <label>AI Provider</label>
+                <select id="ai-provider" onchange="updateModelDropdown()">
+                    <option value="anthropic">Claude (Anthropic)</option>
+                    <option value="openai">GPT (OpenAI)</option>
+                    <option value="gemini">Gemini (Google)</option>
+                </select>
+                <label>API Key</label>
+                <input type="text" id="ai-api-key" placeholder="sk-... or your API key">
+                <label>Model</label>
+                <select id="ai-model" onchange="onModelChange()"></select>
+                <div id="custom-model-container" style="display:none; margin-top:6px;">
+                    <label style="margin-top:0;">Model ID</label>
+                    <input type="text" id="custom-model-name" placeholder="e.g. claude-sonnet-4-6, gpt-4o">
+                </div>
+                <div class="hint">Providing an API key enables AI-powered parsing for more accurate results.</div>
+            </details>
+        </div>
+
+        <button id="parse-btn" class="btn btn-primary" style="width:100%; margin-top:20px;" disabled>Parse Resume</button>
+        <div style="text-align:center; margin-top:14px;">
+            <a href="#" id="skip-onboarding-link" style="font-size:0.85em; color:#9ca3af; text-decoration:none;" onclick="event.preventDefault(); skipOnboarding();">or start from scratch</a>
+        </div>
+
+        <div id="ai-error-panel" class="ai-error-panel">
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+                <span style="font-size:1.2em; flex-shrink:0;">&#9888;</span>
+                <div style="flex:1;">
+                    <div style="font-weight:600; font-size:0.9em; color:#856404; margin-bottom:4px;">
+                        AI parsing failed <span id="ai-error-code" style="font-weight:700;"></span>
+                    </div>
+                    <div id="ai-error-msg" style="font-size:0.82em; color:#6b5700; word-break:break-word; margin-bottom:10px;"></div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn btn-secondary" style="font-size:0.82em; padding:6px 14px;" onclick="dismissAiError()">Fix Key &amp; Retry</button>
+                        <button class="btn btn-success" style="font-size:0.82em; padding:6px 14px;" onclick="continueWithHeuristic()">Continue with Basic Parser</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== Step 2: Parsing Progress ========== -->
+<div id="parsing-step" class="parsing-container">
+    <div class="parsing-card">
+        <h2>Parsing your resume</h2>
+        <div class="parsing-sub">Hang tight, this only takes a few seconds.</div>
+        <div class="progress-steps">
+            <div class="progress-step" id="ps-upload">
+                <div class="step-indicator">1</div>
+                <div class="step-text">Uploading PDF...</div>
+                <div class="step-connector"></div>
+            </div>
+            <div class="progress-step" id="ps-extract">
+                <div class="step-indicator">2</div>
+                <div class="step-text">Extracting text &amp; formatting...</div>
+                <div class="step-connector"></div>
+            </div>
+            <div class="progress-step" id="ps-sections">
+                <div class="step-indicator">3</div>
+                <div class="step-text">Identifying sections...</div>
+                <div class="step-connector"></div>
+            </div>
+            <div class="progress-step" id="ps-build">
+                <div class="step-indicator">4</div>
+                <div class="step-text">Building your profile...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== Step 3: Review ========== -->
+<div id="review-step" class="review-container">
+    <div class="review-header">
+        <h2>Review Parsed Resume</h2>
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div class="view-toggle">
+                <button class="view-toggle-btn active" id="toggle-structured" onclick="switchView('structured')">Sections</button>
+                <button class="view-toggle-btn" id="toggle-yaml" onclick="switchView('yaml')">YAML</button>
+            </div>
+            <span style="font-size:0.82em; color:#9ca3af;">Edit fields, then confirm.</span>
+        </div>
+    </div>
+    <div id="confidence-bar" class="confidence-bar"></div>
+
+    <div class="review-body">
+        <!-- Left panel -->
+        <div class="review-left">
+            <div id="structured-view"></div>
+            <div id="yaml-view">
+                <div id="yaml-editor" style="flex:1;"></div>
+            </div>
+
+            <!-- Section search -->
+            <div class="bottom-bar" id="section-search-bar">
+                <div class="bottom-bar-row">
+                    <span class="bottom-bar-label">Missing a section?</span>
+                    <input type="text" class="bottom-bar-input" id="section-hint" placeholder="e.g. Awards, Certifications, Publications">
+                    <button class="btn btn-primary" style="padding:7px 14px; font-size:0.82em;" onclick="searchSection()">Search</button>
+                </div>
+                <div id="search-result" style="display:none; margin-top:8px; padding:10px; background:#fff; border:1px solid #e5e7eb; border-radius:6px; font-size:0.85em;">
+                    <div id="search-result-content"></div>
+                    <button class="btn btn-success" style="margin-top:8px; padding:4px 12px; font-size:0.82em;" onclick="addSearchResultToYaml()">Add to YAML</button>
+                </div>
+            </div>
+
+            <!-- AI change bar -->
+            <div class="bottom-bar" id="ai-change-bar" style="display:none;">
+                <div class="bottom-bar-row">
+                    <span class="bottom-bar-label">AI Edit:</span>
+                    <input type="text" class="bottom-bar-input" id="ai-change-input" placeholder="e.g. Merge skills, reorder sections, fix formatting...">
+                    <button class="btn btn-primary" style="padding:7px 14px; font-size:0.82em;" onclick="applyAIChange()">Apply</button>
+                </div>
+                <div class="hint" style="margin-top:4px;">Describe what you want to change and AI will update the YAML.</div>
+            </div>
+        </div>
+
+        <!-- Right panel -->
+        <div class="review-right">
+            <div class="right-tab-bar">
+                <button class="right-tab-btn active" id="tab-pdf" onclick="switchRightTab('pdf')">Original PDF</button>
+                <button class="right-tab-btn" id="tab-preview" onclick="switchRightTab('preview')">Live Preview</button>
+            </div>
+            <div id="pdf-viewer" style="flex:1;"><iframe id="pdf-frame" src="about:blank"></iframe></div>
+            <div id="preview-viewer" style="flex:1; display:none;"><iframe id="preview-frame" src="about:blank"></iframe></div>
+        </div>
+    </div>
+
+    <div class="review-footer">
+        <button id="reupload-btn" class="btn btn-secondary">Re-upload Different PDF</button>
+        <button id="confirm-btn" class="btn btn-success" style="min-width:180px;">Confirm &amp; Continue</button>
+    </div>
+</div>
+
+<script>
+// ---- State ----
+var parsedData = null;
+var resumeData = {};   // JS object from YAML
+var yamlEditor = null;
+var previewTimeout = null;
+var currentView = 'structured'; // 'structured' or 'yaml'
+var currentRightTab = 'pdf';    // 'pdf' or 'preview'
+
+// ---- Toast ----
+function showToast(message, type) {
+    var container = document.getElementById('toast-container');
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + (type || 'info');
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.classList.add('fade-out');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 3000);
+}
+
+// ---- Drag-and-Drop Upload ----
+var dropZone = document.getElementById('drop-zone');
+var fileInput = document.getElementById('resume-pdf');
+
+dropZone.addEventListener('click', function() { fileInput.click(); });
+dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) {
+        var file = e.dataTransfer.files[0];
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            fileInput.files = e.dataTransfer.files;
+            onFileSelected(file);
+        } else {
+            showToast('Please upload a PDF file.', 'error');
+        }
+    }
+});
+
+fileInput.addEventListener('change', function() {
+    if (this.files.length) onFileSelected(this.files[0]);
+});
+
+function onFileSelected(file) {
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-size').textContent = formatFileSize(file.size);
+    document.getElementById('file-info').style.display = 'flex';
+    dropZone.style.display = 'none';
+    document.getElementById('parse-options').style.display = 'block';
+    document.getElementById('parse-btn').disabled = false;
+}
+
+document.getElementById('file-remove').addEventListener('click', function() {
+    fileInput.value = '';
+    document.getElementById('file-info').style.display = 'none';
+    dropZone.style.display = 'block';
+    document.getElementById('parse-options').style.display = 'none';
+    document.getElementById('parse-btn').disabled = true;
+});
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ---- Parsing Progress Animation ----
+var progressSteps = ['ps-upload', 'ps-extract', 'ps-sections', 'ps-build'];
+var progressTimers = [];
+
+function showParsingProgress() {
+    document.getElementById('upload-step').style.display = 'none';
+    document.getElementById('parsing-step').style.display = 'flex';
+
+    // Reset all steps
+    progressSteps.forEach(function(id) {
+        var el = document.getElementById(id);
+        el.classList.remove('active', 'done');
+    });
+
+    // Animate steps sequentially
+    var delays = [0, 600, 1400, 2200];
+    delays.forEach(function(delay, idx) {
+        var t = setTimeout(function() {
+            // Mark previous as done
+            if (idx > 0) document.getElementById(progressSteps[idx - 1]).classList.remove('active');
+            if (idx > 0) document.getElementById(progressSteps[idx - 1]).classList.add('done');
+            // Mark current as active
+            document.getElementById(progressSteps[idx]).classList.add('active');
+        }, delay);
+        progressTimers.push(t);
+    });
+}
+
+function finishParsingProgress() {
+    progressTimers.forEach(clearTimeout);
+    progressTimers = [];
+    // Mark all done
+    progressSteps.forEach(function(id) {
+        var el = document.getElementById(id);
+        el.classList.remove('active');
+        el.classList.add('done');
+    });
+}
+
+// ---- Parse Button ----
+document.getElementById('parse-btn').addEventListener('click', function() {
+    if (!fileInput.files.length) return;
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Parsing...';
+
+    showParsingProgress();
+
+    var formData = new FormData();
+    formData.append('resume_pdf', fileInput.files[0]);
+
+    var apiKey = document.getElementById('ai-api-key').value.trim();
+    if (apiKey) {
+        formData.append('ai_provider', document.getElementById('ai-provider').value);
+        formData.append('ai_api_key', apiKey);
+        formData.append('ai_model', getSelectedModel());
+    }
+
+    fetch('/api/upload_resume', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        btn.textContent = 'Parse Resume';
+
+        if (data.status === 'success') {
+            parsedData = data;
+            finishParsingProgress();
+            setTimeout(function() { showReviewStep(); }, 500);
+            showToast('Resume parsed successfully!', 'success');
+        } else if (data.status === 'ai_parse_failed') {
+            parsedData = data;
+            document.getElementById('parsing-step').style.display = 'none';
+            document.getElementById('upload-step').style.display = 'flex';
+            showAiError(data.ai_error, data.ai_status_code);
+        } else {
+            document.getElementById('parsing-step').style.display = 'none';
+            document.getElementById('upload-step').style.display = 'flex';
+            showToast('Error: ' + data.message, 'error');
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Parse Resume';
+        document.getElementById('parsing-step').style.display = 'none';
+        document.getElementById('upload-step').style.display = 'flex';
+        showToast('Parse failed: ' + err.message, 'error');
+    });
+});
+
+// ---- AI Error Helpers ----
+function showAiError(message, statusCode) {
+    var panel = document.getElementById('ai-error-panel');
+    document.getElementById('ai-error-code').textContent = statusCode ? '(' + statusCode + ')' : '';
+    document.getElementById('ai-error-msg').textContent = message || 'An unknown error occurred.';
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function dismissAiError() {
+    document.getElementById('ai-error-panel').style.display = 'none';
+    parsedData = null;
+}
+function continueWithHeuristic() {
+    document.getElementById('ai-error-panel').style.display = 'none';
+    showParsingProgress();
+    finishParsingProgress();
+    setTimeout(function() { showReviewStep(); }, 400);
+    showToast('Continuing with basic parser result.', 'info');
+}
+
+// ---- Confidence Bar ----
+function renderConfidence(confidence) {
+    var bar = document.getElementById('confidence-bar');
+    if (!confidence || confidence.overall === undefined) { bar.style.display = 'none'; return; }
+    bar.style.display = 'block';
+    var pct = Math.round(confidence.overall * 100);
+    var cls = pct >= 70 ? 'score-high' : pct >= 40 ? 'score-med' : 'score-low';
+    var html = '<div class="overall"><span>Parse confidence:</span><span class="score-pill ' + cls + '">' + pct + '%</span></div>';
+    var chips = [];
+    (confidence.missing || []).forEach(function(f) {
+        chips.push('<span class="issue-chip chip-missing">' + f.replace('contact.', '') + ' missing</span>');
+    });
+    (confidence.low_confidence || []).forEach(function(f) {
+        if ((confidence.missing || []).indexOf(f) === -1) {
+            chips.push('<span class="issue-chip chip-review">' + f.replace('contact.', '') + ' needs review</span>');
+        }
+    });
+    if (chips.length) html += '<div class="confidence-issues">' + chips.join('') + '</div>';
+    bar.innerHTML = html;
+}
+
+// ---- View Toggle ----
+function switchView(view) {
+    currentView = view;
+    document.getElementById('toggle-structured').classList.toggle('active', view === 'structured');
+    document.getElementById('toggle-yaml').classList.toggle('active', view === 'yaml');
+
+    if (view === 'yaml') {
+        // Sync form data to YAML editor
+        syncFormToYaml();
+        document.getElementById('structured-view').style.display = 'none';
+        document.getElementById('yaml-view').style.display = 'flex';
+        if (yamlEditor) yamlEditor.resize();
+    } else {
+        // Sync YAML editor to form
+        if (yamlEditor) {
+            try {
+                resumeData = jsyaml.load(yamlEditor.getValue()) || {};
+            } catch(e) { /* keep current resumeData */ }
+        }
+        document.getElementById('yaml-view').style.display = 'none';
+        document.getElementById('structured-view').style.display = 'block';
+        buildStructuredView();
+    }
+}
+
+// ---- Right Panel Tabs ----
+function switchRightTab(tab) {
+    currentRightTab = tab;
+    document.getElementById('tab-pdf').classList.toggle('active', tab === 'pdf');
+    document.getElementById('tab-preview').classList.toggle('active', tab === 'preview');
+    document.getElementById('pdf-viewer').style.display = tab === 'pdf' ? 'flex' : 'none';
+    document.getElementById('preview-viewer').style.display = tab === 'preview' ? 'flex' : 'none';
+    if (tab === 'preview') updatePreview();
+}
+
+// ---- Show Review Step ----
+function showReviewStep() {
+    // Initialize Ace editor lazily
+    if (!yamlEditor) {
+        yamlEditor = ace.edit('yaml-editor');
+        yamlEditor.setTheme('ace/theme/chrome');
+        yamlEditor.session.setMode('ace/mode/yaml');
+        yamlEditor.setOptions({ fontSize: '14px', showPrintMargin: false, wrap: true });
+        yamlEditor.session.on('change', function() {
+            clearTimeout(previewTimeout);
+            previewTimeout = setTimeout(function() {
+                if (currentRightTab === 'preview') updatePreview();
+            }, 800);
+        });
+    }
+
+    renderConfidence(parsedData.confidence);
+
+    // Show AI change bar if API key provided
+    if (document.getElementById('ai-api-key').value.trim()) {
+        document.getElementById('ai-change-bar').style.display = 'block';
+    }
+
+    // Parse YAML to JS object
+    try {
+        resumeData = jsyaml.load(parsedData.yaml) || {};
+    } catch(e) {
+        resumeData = {};
+        showToast('Warning: Could not parse YAML structure.', 'warning');
+    }
+
+    // Set YAML in editor
+    yamlEditor.setValue(parsedData.yaml, -1);
+
+    // Build structured view
+    buildStructuredView();
+
+    // Load original PDF
+    document.getElementById('pdf-frame').src = '/api/uploaded_pdf?t=' + Date.now();
+
+    // Fetch and set preview
+    fetchPreview(function(html) {
+        document.getElementById('parsing-step').style.display = 'none';
+        document.getElementById('upload-step').style.display = 'none';
+        document.getElementById('review-step').style.display = 'flex';
+        yamlEditor.resize();
+
+        if (html) {
+            var iframe = document.getElementById('preview-frame');
+            var doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open(); doc.write(html); doc.close();
+        }
+    });
+}
+
+// ---- Build Structured View ----
+function buildStructuredView() {
+    var container = document.getElementById('structured-view');
+    container.innerHTML = '';
+
+    // Personal Info
+    container.appendChild(buildPersonalInfoCard());
+
+    // Summary
+    if (resumeData.summary) container.appendChild(buildSummaryCard());
+
+    // Ordered sections
+    var sectionOrder = ['education', 'technical_skills', 'experience', 'projects', 'extracurricular'];
+    var sectionLabels = {
+        education: 'Education',
+        technical_skills: 'Technical Skills',
+        experience: 'Experience',
+        projects: 'Projects',
+        extracurricular: 'Extracurricular'
+    };
+
+    // Apply display names from parsed section_names
+    if (parsedData && parsedData.section_names) {
+        for (var k in parsedData.section_names) {
+            if (parsedData.section_names[k]) sectionLabels[k] = parsedData.section_names[k];
+        }
+    }
+
+    sectionOrder.forEach(function(key) {
+        if (resumeData[key]) {
+            container.appendChild(buildSectionCard(key, sectionLabels[key] || key.replace(/_/g, ' ')));
+        }
+    });
+
+    // Custom sections
+    for (var key in resumeData) {
+        if (sectionOrder.indexOf(key) === -1 && key !== 'summary') {
+            var label = (parsedData && parsedData.section_names && parsedData.section_names[key])
+                ? parsedData.section_names[key]
+                : key.replace(/_/g, ' ');
+            container.appendChild(buildSectionCard(key, label));
+        }
+    }
+}
+
+function buildPersonalInfoCard() {
+    var card = document.createElement('div');
+    card.className = 'section-card';
+    var header = parsedData ? parsedData.header : {};
+    var contact = header.contact || {};
+
+    card.innerHTML =
+        '<div class="section-card-header" onclick="toggleSection(this)">' +
+            '<h3><span class="chevron">&#9660;</span> Personal Information</h3>' +
+        '</div>' +
+        '<div class="section-card-body">' +
+            '<div class="personal-grid">' +
+                fieldGroup('Name', header.name || '', 'header-name', 'full') +
+                fieldGroup('Email', contact.email || '', 'header-email') +
+                fieldGroup('Phone', contact.phone || '', 'header-phone') +
+                fieldGroup('Location', contact.location || '', 'header-location') +
+                fieldGroup('GitHub', contact.github || '', 'header-github') +
+                fieldGroup('LinkedIn', contact.linkedin || '', 'header-linkedin') +
+                fieldGroup('Portfolio', contact.portfolio_url || '', 'header-portfolio', 'full') +
+            '</div>' +
+        '</div>';
+
+    // Wire up input events for header
+    card.querySelectorAll('.field-input').forEach(function(input) {
+        input.addEventListener('input', function() { syncHeaderFromForm(card); schedulePreviewUpdate(); });
+    });
+    return card;
+}
+
+function syncHeaderFromForm(card) {
+    if (!parsedData) return;
+    var get = function(id) { var el = card.querySelector('#' + id); return el ? el.value : ''; };
+    parsedData.header.name = get('header-name');
+    parsedData.header.contact = parsedData.header.contact || {};
+    parsedData.header.contact.email = get('header-email');
+    parsedData.header.contact.phone = get('header-phone');
+    parsedData.header.contact.location = get('header-location');
+    parsedData.header.contact.github = get('header-github');
+    parsedData.header.contact.linkedin = get('header-linkedin');
+    parsedData.header.contact.portfolio_url = get('header-portfolio');
+}
+
+function buildSummaryCard() {
+    var card = document.createElement('div');
+    card.className = 'section-card';
+    card.innerHTML =
+        '<div class="section-card-header" onclick="toggleSection(this)">' +
+            '<h3><span class="chevron">&#9660;</span> Summary</h3>' +
+        '</div>' +
+        '<div class="section-card-body">' +
+            '<textarea class="field-input" id="field-summary" rows="3">' + escHtml(resumeData.summary || '') + '</textarea>' +
+        '</div>';
+    card.querySelector('#field-summary').addEventListener('input', function() {
+        resumeData.summary = this.value;
+        schedulePreviewUpdate();
+    });
+    return card;
+}
+
+function buildSectionCard(key, label) {
+    var data = resumeData[key];
+    var card = document.createElement('div');
+    card.className = 'section-card';
+    card.dataset.sectionKey = key;
+
+    var count = '';
+    if (Array.isArray(data)) count = '<span class="section-count">(' + data.length + ')</span>';
+
+    card.innerHTML =
+        '<div class="section-card-header" onclick="toggleSection(this)">' +
+            '<h3><span class="chevron">&#9660;</span> ' + escHtml(label) + ' ' + count + '</h3>' +
+        '</div>';
+
+    var body = document.createElement('div');
+    body.className = 'section-card-body';
+
+    if (key === 'education') buildEducationEntries(body, key);
+    else if (key === 'technical_skills') buildSkillsEntries(body, key);
+    else if (key === 'experience') buildExperienceEntries(body, key);
+    else if (key === 'projects') buildProjectEntries(body, key);
+    else if (key === 'extracurricular') buildExtracurricularEntries(body, key);
+    else buildGenericSection(body, key, data);
+
+    card.appendChild(body);
+    return card;
+}
+
+// ---- Section Builders ----
+
+function buildEducationEntries(body, key) {
+    var entries = resumeData[key] || [];
+    entries.forEach(function(entry, idx) {
+        var ec = document.createElement('div');
+        ec.className = 'entry-card';
+        ec.innerHTML =
+            '<button class="remove-entry-btn" onclick="removeEntry(\'' + key + '\',' + idx + ')" title="Remove">&#10005;</button>' +
+            '<div class="field-row">' +
+                fieldGroup('Institution', entry.institution || '', key + '-' + idx + '-institution', 'wide') +
+                fieldGroup('Location', entry.location || '', key + '-' + idx + '-location') +
+            '</div>' +
+            '<div class="field-row">' +
+                fieldGroup('Degree', entry.degree || '', key + '-' + idx + '-degree', 'wide') +
+                fieldGroup('GPA', entry.gpa || '', key + '-' + idx + '-gpa') +
+                fieldGroup('Date', entry.date || '', key + '-' + idx + '-date') +
+            '</div>' +
+            (entry.coursework ? '<div class="field-row">' + fieldGroup('Coursework', entry.coursework, key + '-' + idx + '-coursework', 'wide') + '</div>' : '') +
+            (entry.honors ? '<div class="field-row">' + fieldGroup('Honors', entry.honors, key + '-' + idx + '-honors', 'wide') + '</div>' : '');
+        wireEntryInputs(ec, key, idx);
+        body.appendChild(ec);
+    });
+    body.appendChild(makeAddBtn(key, function() {
+        resumeData[key].push({institution:'', degree:'', location:'', gpa:'', date:''});
+        rebuildSection(key);
+    }));
+}
+
+function buildExperienceEntries(body, key) {
+    var entries = resumeData[key] || [];
+    entries.forEach(function(entry, idx) {
+        var ec = document.createElement('div');
+        ec.className = 'entry-card';
+        ec.innerHTML =
+            '<button class="remove-entry-btn" onclick="removeEntry(\'' + key + '\',' + idx + ')" title="Remove">&#10005;</button>' +
+            '<div class="field-row">' +
+                fieldGroup('Company', entry.company || '', key + '-' + idx + '-company', 'wide') +
+                fieldGroup('Location', entry.location || '', key + '-' + idx + '-location') +
+            '</div>' +
+            '<div class="field-row">' +
+                fieldGroup('Role', entry.role || '', key + '-' + idx + '-role', 'wide') +
+                fieldGroup('Date', entry.date || '', key + '-' + idx + '-date') +
+            '</div>';
+        wireEntryInputs(ec, key, idx);
+        ec.appendChild(buildBulletList(key, idx, entry.bullets || []));
+        body.appendChild(ec);
+    });
+    body.appendChild(makeAddBtn(key, function() {
+        resumeData[key].push({company:'', role:'', location:'', date:'', bullets:[]});
+        rebuildSection(key);
+    }));
+}
+
+function buildProjectEntries(body, key) {
+    var entries = resumeData[key] || [];
+    entries.forEach(function(entry, idx) {
+        var ec = document.createElement('div');
+        ec.className = 'entry-card';
+        ec.innerHTML =
+            '<button class="remove-entry-btn" onclick="removeEntry(\'' + key + '\',' + idx + ')" title="Remove">&#10005;</button>' +
+            '<div class="field-row">' +
+                fieldGroup('Project Name', entry.name || '', key + '-' + idx + '-name', 'wide') +
+                fieldGroup('Date', entry.date || '', key + '-' + idx + '-date') +
+            '</div>' +
+            '<div class="field-row">' +
+                fieldGroup('Event', entry.event || '', key + '-' + idx + '-event') +
+                fieldGroup('Award', entry.award || '', key + '-' + idx + '-award') +
+            '</div>' +
+            (entry.link_url ? '<div class="field-row">' +
+                fieldGroup('Link URL', entry.link_url, key + '-' + idx + '-link_url', 'wide') +
+                fieldGroup('Link Text', entry.link_text || '', key + '-' + idx + '-link_text') +
+            '</div>' : '');
+        wireEntryInputs(ec, key, idx);
+        ec.appendChild(buildBulletList(key, idx, entry.bullets || []));
+        body.appendChild(ec);
+    });
+    body.appendChild(makeAddBtn(key, function() {
+        resumeData[key].push({name:'', event:'', award:'', date:'', bullets:[]});
+        rebuildSection(key);
+    }));
+}
+
+function buildSkillsEntries(body, key) {
+    var entries = resumeData[key] || [];
+    entries.forEach(function(entry, idx) {
+        var row = document.createElement('div');
+        row.className = 'field-row';
+        row.style.marginBottom = '6px';
+        row.innerHTML =
+            '<div class="field-group" style="flex:0 0 160px;">' +
+                '<input class="field-input skill-category-input" id="' + key + '-' + idx + '-category" value="' + escAttr(entry.category || '') + '" placeholder="Category">' +
+            '</div>' +
+            '<div class="field-group" style="flex:1;">' +
+                '<input class="field-input skill-items-input" id="' + key + '-' + idx + '-skills" value="' + escAttr(entry.skills || '') + '" placeholder="Skills (comma-separated)">' +
+            '</div>' +
+            '<button class="bullet-action-btn" onclick="removeEntry(\'' + key + '\',' + idx + ')" title="Remove" style="opacity:1;">&#10005;</button>';
+        row.querySelectorAll('.field-input').forEach(function(input) {
+            input.addEventListener('input', function() {
+                resumeData[key][idx][this.id.endsWith('-category') ? 'category' : 'skills'] = this.value;
+                schedulePreviewUpdate();
+            });
+        });
+        body.appendChild(row);
+    });
+    body.appendChild(makeAddBtn(key, function() {
+        if (!resumeData[key]) resumeData[key] = [];
+        resumeData[key].push({category:'', skills:''});
+        rebuildSection(key);
+    }));
+}
+
+function buildExtracurricularEntries(body, key) {
+    var data = resumeData[key];
+    var bullets = [];
+    if (data && data.bullets) bullets = data.bullets;
+    else if (Array.isArray(data)) bullets = data;
+
+    body.appendChild(buildBulletList(key, -1, bullets));
+}
+
+function buildGenericSection(body, key, data) {
+    // Handle different data shapes
+    if (Array.isArray(data)) {
+        // Array of strings (bullets)
+        if (data.length && typeof data[0] === 'string') {
+            body.appendChild(buildBulletList(key, -1, data));
+            return;
+        }
+        // Array of objects with 'category' + 'skills' (skills-like)
+        if (data.length && data[0] && typeof data[0] === 'object' && data[0].category) {
+            buildSkillsEntries(body, key);
+            return;
+        }
+        // Array of objects with 'company' or 'name' (entries)
+        if (data.length && data[0] && typeof data[0] === 'object') {
+            if (data[0].company) { buildExperienceEntries(body, key); return; }
+            if (data[0].name) { buildProjectEntries(body, key); return; }
+        }
+        // Fallback: show as bullets
+        var strs = data.map(function(d) { return typeof d === 'string' ? d : JSON.stringify(d); });
+        body.appendChild(buildBulletList(key, -1, strs));
+    } else if (data && typeof data === 'object' && data.bullets) {
+        body.appendChild(buildBulletList(key, -1, data.bullets));
+    } else if (typeof data === 'string') {
+        var ta = document.createElement('textarea');
+        ta.className = 'field-input';
+        ta.rows = 3;
+        ta.value = data;
+        ta.addEventListener('input', function() { resumeData[key] = this.value; schedulePreviewUpdate(); });
+        body.appendChild(ta);
+    } else {
+        body.innerHTML = '<div class="empty-state">No data parsed for this section.</div>';
+    }
+}
+
+// ---- Bullet List Builder ----
+function buildBulletList(sectionKey, entryIdx, bullets) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'bullet-list';
+    wrapper.dataset.section = sectionKey;
+    wrapper.dataset.entry = entryIdx;
+
+    bullets.forEach(function(bullet, bIdx) {
+        wrapper.appendChild(makeBulletItem(sectionKey, entryIdx, bIdx, bullet));
+    });
+
+    var addBtn = document.createElement('button');
+    addBtn.className = 'add-bullet-btn';
+    addBtn.textContent = '+ Add bullet';
+    addBtn.addEventListener('click', function() {
+        var arr = getBulletArray(sectionKey, entryIdx);
+        arr.push('');
+        rebuildSection(sectionKey);
+    });
+    wrapper.appendChild(addBtn);
+    return wrapper;
+}
+
+function makeBulletItem(sectionKey, entryIdx, bulletIdx, text) {
+    var item = document.createElement('div');
+    item.className = 'bullet-item';
+    item.innerHTML = '<span class="bullet-marker">&#8226;</span>';
+
+    var ta = document.createElement('textarea');
+    ta.className = 'bullet-text';
+    ta.value = text;
+    ta.rows = 1;
+    // Auto-resize
+    ta.style.height = 'auto';
+    setTimeout(function() { ta.style.height = ta.scrollHeight + 'px'; }, 0);
+    ta.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+        var arr = getBulletArray(sectionKey, entryIdx);
+        arr[bulletIdx] = this.value;
+        schedulePreviewUpdate();
+    });
+
+    var actions = document.createElement('div');
+    actions.className = 'bullet-actions';
+    var removeBtn = document.createElement('button');
+    removeBtn.className = 'bullet-action-btn';
+    removeBtn.innerHTML = '&#10005;';
+    removeBtn.title = 'Remove';
+    removeBtn.addEventListener('click', function() {
+        var arr = getBulletArray(sectionKey, entryIdx);
+        arr.splice(bulletIdx, 1);
+        rebuildSection(sectionKey);
+    });
+    actions.appendChild(removeBtn);
+
+    item.appendChild(ta);
+    item.appendChild(actions);
+    return item;
+}
+
+function getBulletArray(sectionKey, entryIdx) {
+    if (entryIdx === -1 || entryIdx === '-1') {
+        var d = resumeData[sectionKey];
+        if (Array.isArray(d) && d.length && typeof d[0] === 'string') return d;
+        if (d && d.bullets) return d.bullets;
+        // Fallback: treat as flat array
+        if (!Array.isArray(d)) { resumeData[sectionKey] = []; return resumeData[sectionKey]; }
+        return d;
+    }
+    var entry = resumeData[sectionKey][entryIdx];
+    if (!entry.bullets) entry.bullets = [];
+    return entry.bullets;
+}
+
+// ---- Helpers ----
+function fieldGroup(label, value, id, extraClass) {
+    var cls = 'field-group' + (extraClass ? ' ' + extraClass : '');
+    return '<div class="' + cls + '">' +
+        '<div class="field-label">' + escHtml(label) + '</div>' +
+        '<input class="field-input" id="' + id + '" value="' + escAttr(value) + '">' +
+    '</div>';
+}
+
+function wireEntryInputs(entryCard, key, idx) {
+    entryCard.querySelectorAll('.field-input').forEach(function(input) {
+        input.addEventListener('input', function() {
+            var field = this.id.split('-').slice(2).join('-'); // e.g., 'institution', 'link_url'
+            if (resumeData[key] && resumeData[key][idx]) {
+                resumeData[key][idx][field] = this.value;
+            }
+            schedulePreviewUpdate();
+        });
+    });
+}
+
+function makeAddBtn(key, onClick) {
+    var btn = document.createElement('button');
+    btn.className = 'add-entry-btn';
+    btn.textContent = '+ Add entry';
+    btn.addEventListener('click', onClick);
+    return btn;
+}
+
+function removeEntry(key, idx) {
+    if (!resumeData[key]) return;
+    resumeData[key].splice(idx, 1);
+    rebuildSection(key);
+    schedulePreviewUpdate();
+}
+
+function rebuildSection(key) {
+    // Re-render just this section card
+    var card = document.querySelector('.section-card[data-section-key="' + key + '"]');
+    if (card) {
+        var body = card.querySelector('.section-card-body');
+        body.innerHTML = '';
+        if (key === 'education') buildEducationEntries(body, key);
+        else if (key === 'technical_skills') buildSkillsEntries(body, key);
+        else if (key === 'experience') buildExperienceEntries(body, key);
+        else if (key === 'projects') buildProjectEntries(body, key);
+        else if (key === 'extracurricular') buildExtracurricularEntries(body, key);
+        else buildGenericSection(body, key, resumeData[key]);
+        // Update count
+        var h3 = card.querySelector('h3');
+        var countSpan = h3.querySelector('.section-count');
+        if (countSpan && Array.isArray(resumeData[key])) {
+            countSpan.textContent = '(' + resumeData[key].length + ')';
+        }
+    }
+}
+
+function toggleSection(headerEl) {
+    headerEl.parentElement.classList.toggle('collapsed');
+}
+
+function escHtml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(str) { return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ---- YAML <-> Form Sync ----
+function syncFormToYaml() {
+    if (!yamlEditor) return;
+    try {
+        var yamlStr = jsyaml.dump(resumeData, { lineWidth: -1, noRefs: true, quotingType: '"', forceQuotes: false });
+        yamlEditor.setValue(yamlStr, -1);
+    } catch(e) {
+        console.error('YAML dump error:', e);
+    }
+}
+
+// ---- Preview ----
+function schedulePreviewUpdate() {
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(function() {
+        if (currentRightTab === 'preview') updatePreview();
+    }, 800);
+}
+
+function getYamlContent() {
+    if (currentView === 'yaml' && yamlEditor) {
+        return yamlEditor.getValue();
+    }
+    try {
+        return jsyaml.dump(resumeData, { lineWidth: -1, noRefs: true });
+    } catch(e) { return ''; }
+}
+
+function fetchPreview(cb) {
+    fetch('/api/preview', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            resume: getYamlContent(),
+            style: parsedData.style,
+            header: parsedData.header,
+            section_names: parsedData.section_names,
+            custom_sections: parsedData.custom_sections
+        })
+    })
+    .then(function(r) { if (!r.ok) throw new Error('Preview failed'); return r.text(); })
+    .then(function(html) { cb(html); })
+    .catch(function(err) { console.error('Preview error:', err); cb(null); });
+}
+
+function updatePreview() {
+    fetchPreview(function(html) {
+        if (html) {
+            var iframe = document.getElementById('preview-frame');
+            var doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open(); doc.write(html); doc.close();
+        }
+    });
+}
+
+// ---- Section Search ----
+var lastSearchSnippet = '';
+function searchSection() {
+    var hint = document.getElementById('section-hint').value.trim();
+    if (!hint) { showToast('Enter a section name to search for.', 'error'); return; }
+
+    fetch('/api/search_section', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({section_hint: hint})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'found') {
+            lastSearchSnippet = data.yaml_snippet;
+            var resultDiv = document.getElementById('search-result');
+            document.getElementById('search-result-content').innerHTML =
+                '<strong>Found: ' + escHtml(data.heading) + '</strong>' +
+                '<pre style="margin:6px 0 0; font-size:0.88em; max-height:120px; overflow:auto; background:#f8f9fa; padding:8px; border-radius:4px;">' +
+                escHtml(data.yaml_snippet) + '</pre>';
+            resultDiv.style.display = 'block';
+
+            if (data.section_key && parsedData) {
+                parsedData._pending_section = {
+                    key: data.section_key,
+                    display_name: data.display_name || data.heading,
+                    render_type: data.render_type || 'bullets'
+                };
+            }
+            showToast('Found "' + data.heading + '" section!', 'success');
+        } else {
+            document.getElementById('search-result').style.display = 'none';
+            showToast(data.message || 'Section not found.', 'info');
+        }
+    })
+    .catch(function(err) { showToast('Search failed: ' + err.message, 'error'); });
+}
+
+function addSearchResultToYaml() {
+    if (!lastSearchSnippet) return;
+    // Parse snippet and merge into resumeData
+    try {
+        var snippet = jsyaml.load(lastSearchSnippet);
+        if (snippet && typeof snippet === 'object') {
+            for (var k in snippet) { resumeData[k] = snippet[k]; }
+        }
+    } catch(e) { /* fallback: append raw to YAML */ }
+
+    // Also append to YAML editor
+    if (yamlEditor) {
+        var current = yamlEditor.getValue();
+        yamlEditor.setValue(current.trimEnd() + '\n\n' + lastSearchSnippet, -1);
+    }
+
+    if (parsedData && parsedData._pending_section) {
+        var sec = parsedData._pending_section;
+        if (!parsedData.custom_sections) parsedData.custom_sections = [];
+        if (!parsedData.custom_sections.some(function(s) { return s.key === sec.key; })) {
+            parsedData.custom_sections.push(sec);
+        }
+        delete parsedData._pending_section;
+    }
+
+    document.getElementById('search-result').style.display = 'none';
+    document.getElementById('section-hint').value = '';
+    lastSearchSnippet = '';
+    buildStructuredView();
+    showToast('Section added!', 'success');
+}
+
+// ---- AI Change ----
+function applyAIChange() {
+    var changeText = document.getElementById('ai-change-input').value.trim();
+    if (!changeText) { showToast('Enter what you want to change.', 'error'); return; }
+    var apiKey = document.getElementById('ai-api-key').value.trim();
+    if (!apiKey) { showToast('An AI API key is required.', 'error'); return; }
+
+    var btn = document.querySelector('#ai-change-bar .btn-primary');
+    btn.disabled = true; btn.textContent = 'Applying...';
+
+    fetch('/api/ai_change_request', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            yaml: getYamlContent(),
+            change_request: changeText,
+            ai_provider: document.getElementById('ai-provider').value,
+            ai_api_key: apiKey,
+            ai_model: getSelectedModel()
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false; btn.textContent = 'Apply';
+        if (data.status === 'success') {
+            if (yamlEditor) yamlEditor.setValue(data.yaml, -1);
+            try { resumeData = jsyaml.load(data.yaml) || {}; } catch(e) {}
+            if (currentView === 'structured') buildStructuredView();
+            document.getElementById('ai-change-input').value = '';
+            showToast('Changes applied!', 'success');
+        } else { showToast('Error: ' + data.message, 'error'); }
+    })
+    .catch(function(err) { btn.disabled = false; btn.textContent = 'Apply'; showToast('Failed: ' + err.message, 'error'); });
+}
+
+// ---- Re-upload ----
+document.getElementById('reupload-btn').addEventListener('click', function() {
+    document.getElementById('review-step').style.display = 'none';
+    document.getElementById('upload-step').style.display = 'flex';
+    parsedData = null; resumeData = {};
+    fileInput.value = '';
+    document.getElementById('file-info').style.display = 'none';
+    document.getElementById('drop-zone').style.display = 'block';
+    document.getElementById('parse-btn').disabled = true;
+    document.getElementById('parse-options').style.display = 'none';
+    document.getElementById('ai-error-panel').style.display = 'none';
+    document.getElementById('search-result').style.display = 'none';
+    document.getElementById('section-hint').value = '';
+    lastSearchSnippet = '';
+});
+
+// ---- Confirm ----
+document.getElementById('confirm-btn').addEventListener('click', function() {
+    if (!confirm('Once confirmed, you won\'t be able to change the structure. Click OK to continue.')) return;
+
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Saving...';
+
+    // Sync latest form data
+    if (currentView === 'structured') syncFormToYaml();
+    var yamlContent = yamlEditor ? yamlEditor.getValue() : getYamlContent();
+
+    fetch('/api/complete_onboarding', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            resume: yamlContent,
+            header: parsedData.header,
+            style: parsedData.style,
+            custom_sections: parsedData.custom_sections,
+            section_names: parsedData.section_names
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'success') {
+            showToast('Setup complete! Redirecting...', 'success');
+            setTimeout(function() { window.location.href = '/'; }, 1000);
+        } else {
+            btn.disabled = false; btn.textContent = 'Confirm & Continue';
+            showToast('Error: ' + data.message, 'error');
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false; btn.textContent = 'Confirm & Continue';
+        showToast('Save failed: ' + err.message, 'error');
+    });
+});
+
+// ---- Model Dropdown ----
+var PROVIDER_MODELS = {
+    'anthropic': [
+        { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (Fastest)' },
+        { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Balanced)' },
+        { value: 'claude-opus-4-6', label: 'Claude Opus 4.6 (Most Capable)' },
+        { value: 'custom', label: 'Custom Model...' }
+    ],
+    'openai': [
+        { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast)' },
+        { value: 'gpt-4o', label: 'GPT-4o (Flagship)' },
+        { value: 'o3-mini', label: 'o3-mini (Reasoning)' },
+        { value: 'custom', label: 'Custom Model...' }
+    ],
+    'gemini': [
+        { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Latest)' },
+        { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite (Fastest)' },
+        { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Most Capable)' },
+        { value: 'custom', label: 'Custom Model...' }
+    ]
+};
+
+function updateModelDropdown() {
+    var provider = document.getElementById('ai-provider').value;
+    var modelSelect = document.getElementById('ai-model');
+    var models = PROVIDER_MODELS[provider] || [];
+    modelSelect.innerHTML = '';
+    models.forEach(function(m) {
+        var option = document.createElement('option');
+        option.value = m.value; option.textContent = m.label;
+        modelSelect.appendChild(option);
+    });
+    document.getElementById('custom-model-container').style.display = 'none';
+}
+function onModelChange() {
+    document.getElementById('custom-model-container').style.display =
+        document.getElementById('ai-model').value === 'custom' ? 'block' : 'none';
+}
+function getSelectedModel() {
+    var model = document.getElementById('ai-model').value;
+    return model === 'custom' ? document.getElementById('custom-model-name').value.trim() : model;
+}
+updateModelDropdown();
+
+// Enter key triggers AI change
+document.getElementById('ai-change-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); applyAIChange(); }
+});
+
+// Skip onboarding
+function skipOnboarding() {
+    if (!confirm('Start with a blank resume? You can always upload a PDF later from Settings.')) return;
+    fetch('/api/skip_onboarding', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'success') {
+            showToast('Redirecting to editor...', 'success');
+            setTimeout(function() { window.location.href = '/'; }, 600);
+        } else {
+            showToast('Error: ' + data.message, 'error');
+        }
+    })
+    .catch(function(err) { showToast('Error: ' + err.message, 'error'); });
+}
+
+// Auto-load saved AI config on page load
+(function loadSavedAiConfig() {
+    fetch('/api/settings/ai_config')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'success' && data.has_key) {
+            // Pre-fill provider and model from saved config
+            if (data.provider) document.getElementById('ai-provider').value = data.provider;
+            if (data.model) {
+                updateModelDropdown();
+                var modelSelect = document.getElementById('ai-model');
+                var found = false;
+                for (var i = 0; i < modelSelect.options.length; i++) {
+                    if (modelSelect.options[i].value === data.model) {
+                        modelSelect.value = data.model;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    modelSelect.value = 'custom';
+                    document.getElementById('custom-model-container').style.display = 'block';
+                    document.getElementById('custom-model-name').value = data.model;
+                }
+            } else {
+                updateModelDropdown();
+            }
+            // Show that a key is already saved
+            document.getElementById('ai-api-key').placeholder = 'Key saved \u2014 leave blank to use it';
+        }
+    })
+    .catch(function() { /* ignore, user can enter manually */ });
+})();
+</script>
+</body>
+</html>

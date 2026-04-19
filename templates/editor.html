@@ -1,0 +1,2388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; display: flex; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .pane { width: 50%; height: 100%; display: flex; flex-direction: column; }
+        .left-pane { border-right: 1px solid #ccc; background: #f5f5f5; }
+        .right-pane { background: #fff; }
+
+        #editor { flex-grow: 1; font-size: 14px; }
+
+        .toolbar {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .toolbar button {
+            padding: 6px 14px;
+            font-size: 0.8em;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .preview-container {
+            flex-grow: 1;
+            overflow: auto;
+            padding: 20px;
+            background: #525659;
+            display: flex;
+            justify-content: center;
+        }
+
+        #preview-frame {
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            min-height: 11in;
+            width: 8.5in;
+            border: none;
+            transform-origin: top center;
+            transition: transform 0.2s;
+        }
+
+        .controls {
+            padding: 10px;
+            background: #fff;
+            border-top: 1px solid #ccc;
+        }
+
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.85em;
+            transition: background 0.15s, transform 0.1s;
+        }
+        button:hover { background: #0056b3; }
+        button:active { transform: scale(0.97); }
+
+        input[type="text"], input[type="color"], select {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.85em;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus, select:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.15);
+        }
+
+        /* --- Top Navigation Bar --- */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px;
+            background: #1a1a2e;
+            color: #eee;
+            height: 44px;
+            font-size: 0.85em;
+        }
+        .app-title {
+            font-weight: 700;
+            font-size: 1em;
+            color: #fff;
+            letter-spacing: 0.02em;
+        }
+        .user-menu-wrapper { position: relative; }
+        .user-menu-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #eee;
+            padding: 4px 10px 4px 4px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.15s;
+        }
+        .user-menu-trigger:hover { background: rgba(255,255,255,0.1); }
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85em;
+            text-transform: uppercase;
+        }
+        .user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dropdown-arrow { font-size: 0.7em; opacity: 0.7; }
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            min-width: 240px;
+            z-index: 2000;
+            overflow: hidden;
+            color: #333;
+        }
+        .user-dropdown.open { display: block; }
+        .dropdown-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid #eee;
+        }
+        .dropdown-header strong { font-size: 0.95em; }
+        .dropdown-email { font-size: 0.8em; color: #888; margin-top: 2px; }
+        .dropdown-divider { height: 1px; background: #eee; }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            color: #333;
+            text-decoration: none;
+            font-size: 0.88em;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .dropdown-item:hover { background: #f5f5f5; }
+        .dropdown-item .di-icon {
+            width: 20px;
+            text-align: center;
+            font-size: 1.1em;
+        }
+        .dropdown-item.danger { color: #dc3545; }
+        .dropdown-item.danger:hover { background: #fff5f5; }
+
+        /* --- Side Panels --- */
+        .side-panel {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 380px;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .side-panel.open { transform: translateX(0); }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #eee;
+            position: sticky;
+            top: 0;
+            background: #fff;
+            z-index: 1;
+        }
+        .panel-header h3 { margin: 0; font-size: 1.05em; }
+        .panel-close {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: background 0.15s;
+            background: transparent !important;
+            border: none;
+            padding: 0;
+        }
+        .panel-close:hover { background: #f0f0f0 !important; color: #333; }
+        .panel-body { padding: 16px 20px; flex: 1; }
+
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 4px;
+        }
+        .history-item:hover { background: #f9f9f9; }
+        .history-timestamp { font-size: 0.8em; color: #666; }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- Toast Notifications --- */
+        #toast-container {
+            position: fixed;
+            top: 54px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 18px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.88em;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            animation: toast-in 0.3s ease-out;
+            max-width: 360px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toast-success { background: #27ae60; }
+        .toast-error { background: #e74c3c; }
+        .toast-info { background: #3498db; }
+        .toast.fade-out { animation: toast-out 0.3s ease-in forwards; }
+        @keyframes toast-in { from { opacity:0; transform:translateX(60px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes toast-out { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(60px); } }
+
+        .upload-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            gap: 20px;
+        }
+        .upload-overlay h2 { color: #333; margin-bottom: 0; }
+        .upload-overlay p { color: #666; max-width: 400px; text-align: center; }
+        .upload-box {
+            border: 2px dashed #007bff;
+            border-radius: 12px;
+            padding: 40px 60px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .upload-box:hover { background: #f0f7ff; }
+        .upload-box input[type="file"] { display: none; }
+
+        /* --- Settings Panel Form --- */
+        .settings-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .settings-card-title {
+            font-size: 0.88em;
+            font-weight: 700;
+            color: #333;
+            margin: 0 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .settings-card label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 10px;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .settings-card input[type="text"],
+        .settings-card input[type="password"],
+        .settings-card select,
+        .settings-card textarea {
+            width: 100%;
+            padding: 7px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.88em;
+            background: #fff;
+        }
+        .settings-card textarea {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.82em;
+            line-height: 1.4;
+            resize: vertical;
+        }
+        .settings-card .card-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+        .settings-card .card-toggle .arrow {
+            transition: transform 0.2s;
+            display: inline-block;
+            font-size: 0.7em;
+        }
+        .settings-card .card-body.collapsed { display: none; }
+        .parser-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: #fff;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 0.85em;
+        }
+        .parser-item .state { font-weight: 600; font-size: 0.8em; text-transform: uppercase; }
+        .parser-item .state.locked { color: #28a745; }
+        .parser-item .state.active { color: #007bff; }
+        .parser-item .state.draft { color: #ffc107; }
+        .parser-actions button { font-size: 0.75em; padding: 3px 8px; margin-left: 4px; }
+        .mcp-key-display {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.82em;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 10px;
+            word-break: break-all;
+        }
+        .diff-item { padding: 8px 10px; background: #fff; border-radius: 6px; margin-bottom: 6px; font-size: 0.85em; }
+        .diff-item .diff-type { font-weight: 600; font-size: 0.78em; text-transform: uppercase; color: #666; }
+        .jd-session-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 0.88em; }
+        .jd-session-item:hover { background: #f9f9f9; }
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 12px;
+        }
+        .settings-card p.hint {
+            font-size: 0.78em;
+            color: #999;
+            margin: 0 0 8px 0;
+        }
+        .panel-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #eee;
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+        }
+
+        /* --- Custom Section Items --- */
+        .custom-section-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #fff;
+        }
+        .custom-section-item .cs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .custom-section-item .cs-header strong { font-size: 0.88em; }
+        .cs-remove-btn {
+            background: transparent;
+            color: #dc3545;
+            border: 1px solid #dc3545;
+            padding: 2px 10px;
+            font-size: 0.72em;
+            border-radius: 4px;
+        }
+        .cs-remove-btn:hover { background: #dc3545; color: #fff; }
+        .cs-field { margin-bottom: 6px; }
+        .cs-field label {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            color: #888;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            margin-bottom: 2px;
+            display: block;
+        }
+        .cs-field input, .cs-field select {
+            width: 100%;
+            padding: 5px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Top Navigation Bar -->
+<div style="position:fixed; top:0; left:0; right:0; z-index:500;">
+    <div class="top-nav">
+        <div style="display:flex; align-items:center; gap:16px;">
+            <span class="app-title">Resume Builder</span>
+            <span style="color:#fff; font-size:0.85em; padding:4px 10px; border-radius:4px; background:rgba(255,255,255,0.15); font-weight:600;">Resume</span>
+            <a href="/cover-letter" style="color:#ccc; text-decoration:none; font-size:0.85em; padding:4px 10px; border-radius:4px; transition:background 0.15s, color 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='#fff'" onmouseout="this.style.background='none';this.style.color='#ccc'">Cover Letter</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <button onclick="openFeedback()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#eee; padding:4px 12px; border-radius:16px; font-size:0.8em; cursor:pointer;">Feedback</button>
+        <div class="user-menu-wrapper">
+            <button class="user-menu-trigger" onclick="toggleUserMenu()">
+                <span class="user-avatar">{{ user.name[0] if user.name else '?' }}</span>
+                <span class="user-name">{{ user.name }}</span>
+                <span class="dropdown-arrow">&#9662;</span>
+            </button>
+            <div class="user-dropdown" id="user-dropdown">
+                <div class="dropdown-header">
+                    <strong>{{ user.name }}</strong>
+                    <div class="dropdown-email">{{ user.email }}</div>
+                </div>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item" href="#" onclick="event.preventDefault(); toggleUserMenu(); toggleSettings();">
+                    <span class="di-icon">&#9881;</span> Settings
+                </a>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item danger" href="#" onclick="event.preventDefault(); handleLogout();">
+                    <span class="di-icon">&#8618;</span> Sign Out
+                </a>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item danger" href="#" onclick="event.preventDefault(); toggleUserMenu(); showDeleteProfile();">
+                    <span class="di-icon">&#128465;</span> Delete Account
+                </a>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<div class="pane left-pane" style="margin-top: 44px;">
+    <div class="toolbar">
+        <input type="text" id="save-keyword" placeholder="Version keyword (e.g., 'tech')" style="border-radius:6px;">
+        <button onclick="saveResume()">Save Version</button>
+        <button onclick="toggleHistory()" style="background: #6c757d;">History</button>
+        <button onclick="toggleJDMatch()" style="background: #9b59b6;">JD Match</button>
+        <button onclick="downloadPDF()" style="background: #28a745;">Download PDF</button>
+    </div>
+    <div class="controls">
+        <div style="display:flex; justify-content:flex-end; align-items:center; gap:10px; padding:4px 0;">
+            <!-- Grammar check commented out for now -->
+            <!-- <span title="Check Grammar" onclick="checkGrammar()" style="cursor:pointer; font-size:1.2em;">&#x1F4DD;</span> -->
+            <span title="Live View" onclick="openLiveView()" style="cursor:pointer; font-size:1.2em;">&#x1F441;&#xFE0F;</span>
+            <span title="Toggle Wrap" onclick="toggleWrap()" style="cursor:pointer; font-size:1.2em;">&#x21A9;&#xFE0F;</span>
+        </div>
+        <div id="header-preview" style="display:none;"></div>
+
+        <details>
+            <summary>Styling Options</summary>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 0;">
+                <label>Font: <select id="font-family" onchange="updatePreview()">
+                    <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+                    <option value='Arial, sans-serif'>Arial</option>
+                    <option value='"Helvetica Neue", Helvetica, sans-serif'>Helvetica</option>
+                    <option value='Georgia, serif'>Georgia</option>
+                    <option value='Calibri, "Trebuchet MS", sans-serif'>Calibri</option>
+                    <option value='Garamond, "EB Garamond", serif'>Garamond</option>
+                    <option value='Cambria, Georgia, serif'>Cambria</option>
+                    <option value='"Courier New", Courier, monospace'>Courier New</option>
+                </select></label>
+                <label>Size: <input type="text" id="font-size" value="{{ style.font_size }}" onchange="updatePreview()"></label>
+                <label>Line Height: <input type="text" id="line-height" value="{{ style.line_height }}" onchange="updatePreview()"></label>
+                <label>Margin: <input type="text" id="margin" value="{{ style.margin }}" onchange="updatePreview()"></label>
+                <label>Accent Color: <input type="color" id="accent-color" value="{{ style.accent_color }}" onchange="updatePreview()"></label>
+            </div>
+        </details>
+    </div>
+
+
+    <div id="editor">{{ resume }}</div>
+</div>
+
+<!-- Live View Modal -->
+<div id="live-view-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
+    <div style="background:white; width:90%; height:90%; display:flex; flex-direction:column; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.5);">
+        <div style="padding:10px; display:flex; justify-content:space-between; border-bottom:1px solid #ccc; align-items:center;">
+            <h3 style="margin:0;">Live PDF Preview</h3>
+            <span onclick="closeLiveView()" style="cursor:pointer; font-size:1.5em;">&times;</span>
+        </div>
+        <iframe id="live-view-frame" style="flex-grow:1; border:none; width:100%;"></iframe>
+    </div>
+</div>
+
+<!-- Grammar Check Modal (commented out for now)
+<div id="grammar-check-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
+    <div style="background:white; width:600px; max-height:80%; display:flex; flex-direction:column; border-radius:8px; box-shadow:0 0 20px rgba(0,0,0,0.5);">
+        <div style="padding:15px; display:flex; justify-content:space-between; border-bottom:1px solid #ccc; align-items:center;">
+            <h3 style="margin:0;">Grammar & Spelling Check</h3>
+            <span onclick="closeGrammarCheck()" style="cursor:pointer; font-size:1.5em;">&times;</span>
+        </div>
+        <div id="grammar-results" style="padding:20px; overflow-y:auto; flex-grow:1;">
+            Loading...
+        </div>
+        <div style="padding:15px; border-top:1px solid #ccc; text-align:right;">
+            <button onclick="closeGrammarCheck()" style="background:#6c757d;">Close</button>
+        </div>
+    </div>
+</div>
+-->
+
+<div class="pane right-pane" style="margin-top: 44px;">
+    <div class="preview-container">
+        <iframe id="preview-frame"></iframe>
+    </div>
+</div>
+
+<!-- History Panel -->
+<div class="side-panel" id="history-panel">
+    <div class="panel-header">
+        <h3>Version History</h3>
+        <button class="panel-close" onclick="toggleHistory()">&times;</button>
+    </div>
+    <div class="panel-body" id="history-list">Loading...</div>
+</div>
+
+<!-- JD Match Panel -->
+<div class="side-panel" id="jd-match-panel" style="width: 420px;">
+    <div class="panel-header">
+        <h3>ATS Match Resume</h3>
+        <button class="panel-close" onclick="toggleJDMatch()">&times;</button>
+    </div>
+    <div class="panel-body">
+        <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">AI Provider</label>
+        <select id="ai-provider" onchange="updateProviderSettings()" style="width: 100%; margin-bottom: 10px; padding: 6px;">
+            <option value="anthropic">Claude (Anthropic)</option>
+            <option value="openai">ChatGPT (OpenAI)</option>
+            <option value="gemini">Gemini (Google)</option>
+        </select>
+
+        <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">Model</label>
+        <select id="ai-model" onchange="onModelChange()" style="width: 100%; margin-bottom: 10px; padding: 6px;">
+        </select>
+
+        <div id="custom-model-container" style="display:none; margin-bottom: 10px;">
+            <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">Model ID</label>
+            <input type="text" id="custom-model-name" placeholder="e.g. claude-sonnet-4-6, gpt-4o, gemini-2.0-flash" oninput="onCustomModelChange()" style="width: 100%; padding: 6px;">
+        </div>
+
+        <div id="jd-ai-config-status" style="margin-bottom:10px; font-size:0.85em; padding:6px 10px; border-radius:6px; background:#f8f9fa;"></div>
+
+        <!-- JD Input Mode Tabs -->
+        <div style="display:flex; background:#f0f2f5; border-radius:8px; padding:3px; margin-bottom:12px; gap:2px;">
+            <button onclick="switchJDMode('paste')" id="jd-mode-paste" style="flex:1; padding:6px; border:none; border-radius:6px; font-size:0.82em; font-weight:600; cursor:pointer; background:white; color:#1e40af; box-shadow:0 1px 3px rgba(0,0,0,0.1);">Paste JD</button>
+            <button onclick="switchJDMode('search')" id="jd-mode-search" style="flex:1; padding:6px; border:none; border-radius:6px; font-size:0.82em; font-weight:600; cursor:pointer; background:transparent; color:#6b7280;">Search by Company</button>
+            <button onclick="switchJDMode('url')" id="jd-mode-url" style="flex:1; padding:6px; border:none; border-radius:6px; font-size:0.82em; font-weight:600; cursor:pointer; background:transparent; color:#6b7280;">From URL</button>
+        </div>
+
+        <!-- Paste JD mode (default) -->
+        <div id="jd-input-paste">
+            <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">Job Description</label>
+            <textarea id="jd-text" rows="10" placeholder="Paste Job Description here..." style="width: 100%; resize: vertical; padding: 6px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+        </div>
+
+        <!-- Search by company+role mode -->
+        <div id="jd-input-search" style="display:none;">
+            <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">Company</label>
+            <input type="text" id="jd-company" placeholder="e.g. Stripe, Datadog, Anthropic" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px; margin-bottom:8px;">
+            <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">Role</label>
+            <input type="text" id="jd-role" placeholder="e.g. Backend Engineer, SRE, ML Engineer" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px; margin-bottom:8px;">
+            <button onclick="findJD('search')" style="width:100%; background:#9b59b6; margin-top:4px;">Find JD &amp; Generate Resume</button>
+            <p style="font-size:0.78em; color:#999; margin-top:6px;">Searches the web for the job posting, extracts the JD, and generates a tailored resume.</p>
+        </div>
+
+        <!-- From URL mode -->
+        <div id="jd-input-url" style="display:none;">
+            <label style="display:block; margin-bottom:5px; font-size:0.85em; font-weight:600;">Job Posting URL</label>
+            <input type="text" id="jd-url" placeholder="https://boards.greenhouse.io/..." style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px; margin-bottom:8px;">
+            <button onclick="findJD('url')" style="width:100%; background:#9b59b6; margin-top:4px;">Extract JD &amp; Generate Resume</button>
+            <p style="font-size:0.78em; color:#999; margin-top:6px;">Fetches the page, extracts the job description, and generates a tailored resume.</p>
+        </div>
+
+        <!-- JD finder status -->
+        <div id="jd-finder-status" style="display:none; margin-top:10px; padding:12px; background:#f8f9fa; border-radius:8px; font-size:0.88em;"></div>
+
+        <div id="jd-action-buttons">
+            <button onclick="analyzeCurrentResume()" style="width: 100%; margin-top: 10px; background: #28a745;">Check Current Resume Score</button>
+            <button onclick="analyzeJD()" style="width: 100%; margin-top: 10px; background: #6c757d;">Analyze Saved Versions</button>
+        </div>
+
+        <div id="match-results" style="margin-top: 20px;"></div>
+
+        <!-- Cover Letter Link -->
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid #eee; text-align:center;">
+            <a href="/cover-letter" style="display:inline-block; width:100%; padding:10px; background:#e67e22; color:#fff; border-radius:6px; text-decoration:none; font-size:0.88em; font-weight:600;">Open Cover Letter Editor</a>
+        </div>
+
+        <!-- Agent Learning Banner -->
+        <div id="learning-banner" style="display:none; margin-top:16px; padding:12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
+            <div style="font-size:0.88em; font-weight:600; color:#1e40af; margin-bottom:6px;">Did you edit the generated resume?</div>
+            <div style="font-size:0.82em; color:#6b7280; margin-bottom:8px;">Tell us what you changed and why so future generations improve.</div>
+            <div id="learning-diff" style="font-size:0.8em; color:#475569; margin-bottom:8px; max-height:120px; overflow-y:auto;"></div>
+            <textarea id="learning-reason" rows="2" placeholder="e.g. Removed project X because it's not relevant, reworded summary to be more concise..." style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px; font-size:0.85em; margin-bottom:6px;"></textarea>
+            <div style="display:flex; gap:6px;">
+                <button onclick="submitLearning()" style="flex:1; background:#2563eb; font-size:0.85em;">Save Feedback</button>
+                <button onclick="dismissLearning()" style="padding:6px 12px; background:#6c757d; font-size:0.85em;">Dismiss</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="side-panel" id="settings-panel" style="width: 420px;">
+    <div class="panel-header">
+        <h3>Settings</h3>
+        <button class="panel-close" onclick="toggleSettings()">&times;</button>
+    </div>
+    <div class="panel-body">
+        <!-- Header / Contact Card -->
+        <div class="settings-card">
+            <div class="settings-card-title">&#128100; Header / Contact Info</div>
+            <label>Full Name</label>
+            <input type="text" id="settings-name">
+            <div class="settings-grid">
+                <div>
+                    <label>Location</label>
+                    <input type="text" id="settings-location" placeholder="New York, NY">
+                </div>
+                <div>
+                    <label>Phone</label>
+                    <input type="text" id="settings-phone" placeholder="+1 555-123-4567">
+                </div>
+            </div>
+            <label>Email</label>
+            <input type="text" id="settings-email">
+            <div class="settings-grid">
+                <div>
+                    <label>GitHub URL</label>
+                    <input type="text" id="settings-github" placeholder="https://github.com/...">
+                </div>
+                <div>
+                    <label>LinkedIn URL</label>
+                    <input type="text" id="settings-linkedin" placeholder="https://linkedin.com/in/...">
+                </div>
+            </div>
+            <div class="settings-grid">
+                <div>
+                    <label>Portfolio Label</label>
+                    <input type="text" id="settings-portfolio-label" placeholder="Portfolio">
+                </div>
+                <div>
+                    <label>Portfolio URL</label>
+                    <input type="text" id="settings-portfolio-url" placeholder="https://yoursite.com">
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Names Card -->
+        <div class="settings-card">
+            <div class="settings-card-title">&#128221; Section Names</div>
+            <p class="hint">Customize the titles displayed on your resume for each section.</p>
+            <label>Education</label>
+            <input type="text" id="section-education">
+            <label>Technical Skills</label>
+            <input type="text" id="section-technical_skills">
+            <label>Experience</label>
+            <input type="text" id="section-experience">
+            <label>Projects</label>
+            <input type="text" id="section-projects">
+            <label>Extracurricular</label>
+            <input type="text" id="section-extracurricular">
+        </div>
+
+        <!-- AI Configuration Card -->
+        <div class="settings-card">
+            <div class="settings-card-title">&#129302; AI Configuration</div>
+            <p class="hint">Configure your AI provider to enable JD analysis, resume generation, and grammar checking.</p>
+            <label>Provider</label>
+            <select id="settings-ai-provider" onchange="updateAiProviderPlaceholder()">
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="gemini">Google (Gemini)</option>
+            </select>
+            <label>API Key</label>
+            <div style="position:relative;">
+                <input type="password" id="settings-ai-api-key" placeholder="sk-ant-..." style="padding-right:60px;">
+                <button onclick="toggleApiKeyVisibility()" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;color:#888;font-size:0.8em;cursor:pointer;padding:4px 8px;" id="api-key-toggle-btn">Show</button>
+            </div>
+            <div id="ai-config-status" style="margin-top:4px;font-size:0.8em;color:#888;"></div>
+            <label>Model (optional)</label>
+            <input type="text" id="settings-ai-model" placeholder="Leave blank for default">
+            <button onclick="saveAiConfig()" style="width:100%; margin-top:8px; background:#007bff; border-radius:6px; padding:8px; font-size:0.85em;">Save AI Config</button>
+            <button onclick="removeAiConfig()" style="width:100%; margin-top:4px; background:#dc3545; border-radius:6px; padding:6px; font-size:0.8em;">Remove Saved Key</button>
+        </div>
+
+        <!-- Candidate Database Card -->
+        <div class="settings-card">
+            <div class="settings-card-title">&#128218; Candidate Database</div>
+            <p class="hint">Your ground-truth profile: skills, projects, metrics, experiences. The AI agent draws from this when generating resumes. Markdown format.</p>
+            <textarea id="settings-candidate-db" rows="8" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82em; font-family:monospace; line-height:1.4; resize:vertical;" placeholder="Loading..."></textarea>
+            <button onclick="saveCandidateDB()" style="width:100%; margin-top:6px; background:#007bff; border-radius:6px; padding:6px; font-size:0.82em;">Save Candidate Database</button>
+        </div>
+
+        <!-- Resume Rules Card -->
+        <div class="settings-card">
+            <div class="settings-card-title">&#128203; Resume Rules</div>
+            <p class="hint">Formatting and content rules the AI follows when generating resumes. Customize to match your preferences.</p>
+            <textarea id="settings-resume-rules" rows="6" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:0.82em; font-family:monospace; line-height:1.4; resize:vertical;" placeholder="Loading..."></textarea>
+            <button onclick="saveResumeRules()" style="width:100%; margin-top:6px; background:#007bff; border-radius:6px; padding:6px; font-size:0.82em;">Save Resume Rules</button>
+        </div>
+
+        <!-- Custom Sections Card -->
+        <div class="settings-card">
+            <div class="settings-card-title">&#10010; Custom Sections</div>
+            <p class="hint">Add extra sections like Certifications, Publications, Awards, etc. Then add data under their YAML key in the editor.</p>
+            <div id="custom-sections-list"></div>
+            <button onclick="addCustomSection()" style="width:100%; margin-top:8px; background:#17a2b8; border-radius:6px;">+ Add Custom Section</button>
+        </div>
+
+        <!-- Resume Rules Editor -->
+        <div class="settings-card">
+            <div class="settings-card-title card-toggle" onclick="toggleCardBody('resume-rules-body', this)">
+                <span class="arrow">&#9654;</span> &#128220; Resume Rules
+            </div>
+            <div id="resume-rules-body" class="card-body collapsed">
+                <p class="hint">Formatting preferences, content rules, and bullet style patterns the AI agent follows when generating resumes.</p>
+                <textarea id="settings-resume-rules" rows="12" placeholder="Loading..."></textarea>
+                <button onclick="saveDataFile('resume_rules', 'settings-resume-rules')" style="width:100%; margin-top:8px; background:#28a745; border-radius:6px; padding:7px; font-size:0.85em;">Save Rules</button>
+            </div>
+        </div>
+
+        <!-- Candidate Database Editor -->
+        <div class="settings-card">
+            <div class="settings-card-title card-toggle" onclick="toggleCardBody('candidate-db-body', this)">
+                <span class="arrow">&#9654;</span> &#128209; Candidate Database
+            </div>
+            <div id="candidate-db-body" class="card-body collapsed">
+                <p class="hint">Ground truth for all resume content: experience, projects, skills, and metrics. The AI agent draws from this when generating resumes.</p>
+                <textarea id="settings-candidate-db" rows="12" placeholder="Loading..."></textarea>
+                <button onclick="saveDataFile('candidate_database', 'settings-candidate-db')" style="width:100%; margin-top:8px; background:#28a745; border-radius:6px; padding:7px; font-size:0.85em;">Save Database</button>
+            </div>
+        </div>
+
+        <!-- Cover Letter Database Editor -->
+        <div class="settings-card">
+            <div class="settings-card-title card-toggle" onclick="toggleCardBody('cover-letter-db-body', this)">
+                <span class="arrow">&#9654;</span> &#9993; Cover Letter Database
+            </div>
+            <div id="cover-letter-db-body" class="card-body collapsed">
+                <p class="hint">Stories, motivations, and career context for cover letter generation. Written in your own voice.</p>
+                <textarea id="settings-cover-letter-db" rows="12" placeholder="Loading..."></textarea>
+                <button onclick="saveDataFile('cover_letter_database', 'settings-cover-letter-db')" style="width:100%; margin-top:8px; background:#28a745; border-radius:6px; padding:7px; font-size:0.85em;">Save Database</button>
+            </div>
+        </div>
+
+        <!-- Parser Management -->
+        <div class="settings-card">
+            <div class="settings-card-title card-toggle" onclick="toggleCardBody('parser-mgmt-body', this)">
+                <span class="arrow">&#9654;</span> &#128295; Parser Management
+            </div>
+            <div id="parser-mgmt-body" class="card-body collapsed">
+                <p class="hint">Manage PDF parsers generated from your resume uploads. Lock a parser to reuse it on future uploads with the same layout.</p>
+                <div id="parser-list"><div style="text-align:center; color:#aaa; padding:12px 0; font-size:0.85em;">Loading...</div></div>
+            </div>
+        </div>
+
+        <!-- MCP API Key -->
+        <div class="settings-card">
+            <div class="settings-card-title card-toggle" onclick="toggleCardBody('mcp-key-body', this)">
+                <span class="arrow">&#9654;</span> &#128279; MCP API Key
+            </div>
+            <div id="mcp-key-body" class="card-body collapsed">
+                <p class="hint">Use this key to connect Claude Code or other AI agents to your resume via the MCP server.</p>
+                <div id="mcp-key-display" class="mcp-key-display" style="margin-bottom:8px;">Loading...</div>
+                <div style="display:flex; gap:6px;">
+                    <button onclick="copyMcpKey()" style="flex:1; background:#007bff; border-radius:6px; padding:6px; font-size:0.82em;">Copy Key</button>
+                    <button onclick="regenerateMcpKey()" style="flex:1; background:#dc3545; border-radius:6px; padding:6px; font-size:0.82em;">Regenerate</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- JD Session History -->
+        <div class="settings-card">
+            <div class="settings-card-title card-toggle" onclick="toggleCardBody('jd-history-body', this)">
+                <span class="arrow">&#9654;</span> &#128203; JD Analysis History
+            </div>
+            <div id="jd-history-body" class="card-body collapsed">
+                <p class="hint">Past job description analyses and scores.</p>
+                <div id="jd-sessions-list"><div style="text-align:center; color:#aaa; padding:12px 0; font-size:0.85em;">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+    <div class="panel-footer">
+        <button onclick="saveSettings()" style="width:100%; background:#28a745; padding:10px; border-radius:6px; font-size:0.9em; font-weight:600;">Save Settings</button>
+    </div>
+</div>
+
+<script>
+    // --- Toast Notification System ---
+    function showToast(message, type) {
+        type = type || 'info';
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        var icons = { success: '&#10003;', error: '&#10007;', info: '&#8505;' };
+        toast.innerHTML = '<span>' + (icons[type] || '') + '</span> ' + message;
+        container.appendChild(toast);
+        setTimeout(function() {
+            toast.classList.add('fade-out');
+            setTimeout(function() { toast.remove(); }, 300);
+        }, 3500);
+    }
+
+    // --- User Dropdown Menu ---
+    function toggleUserMenu() {
+        document.getElementById('user-dropdown').classList.toggle('open');
+    }
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.user-menu-wrapper')) {
+            document.getElementById('user-dropdown').classList.remove('open');
+        }
+    });
+
+    // --- Editor Setup ---
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/chrome");
+    editor.session.setMode("ace/mode/yaml");
+    editor.setOptions({
+        fontSize: "14px",
+        showPrintMargin: false,
+        wrap: true,
+    });
+
+    // Current settings cache
+    var currentSettings = null;
+    var customSections = {{ custom_sections | tojson }};
+
+    // Set saved font family in dropdown
+    (function() {
+        var savedFont = {{ style.font_family | tojson }};
+        var fontSelect = document.getElementById('font-family');
+        for (var i = 0; i < fontSelect.options.length; i++) {
+            if (fontSelect.options[i].value === savedFont) {
+                fontSelect.selectedIndex = i;
+                break;
+            }
+        }
+    })();
+    var BUILTIN_KEYS = ['education', 'technical_skills', 'experience', 'projects', 'extracurricular', 'name', 'contact', 'summary'];
+
+    // --- Header Preview ---
+    function renderHeaderPreview() {
+        var el = document.getElementById('header-preview');
+        if (!currentSettings || !currentSettings.header) {
+            el.textContent = '(No header configured -- open Settings to set up)';
+            return;
+        }
+        var h = currentSettings.header;
+        var c = h.contact || {};
+        var text = 'name: ' + (h.name || '') + '\ncontact:';
+        if (c.location) text += '\n  location: ' + c.location;
+        if (c.phone) text += '\n  phone: ' + c.phone;
+        if (c.email) text += '\n  email: ' + c.email;
+        if (c.github) text += '\n  github: ' + c.github;
+        if (c.linkedin) text += '\n  linkedin: ' + c.linkedin;
+        if (c.portfolio_url) text += '\n  portfolio: ' + c.portfolio_url;
+        el.textContent = text;
+    }
+
+    // --- Settings ---
+    function loadSettings() {
+        fetch('/api/settings')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                currentSettings = data.settings;
+                customSections = data.settings.custom_sections || [];
+                renderHeaderPreview();
+                populateSettingsForm();
+                renderCustomSections();
+            }
+        });
+    }
+
+    // --- AI Configuration ---
+    function loadAiConfig() {
+        fetch('/api/settings/ai_config')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                var providerEl = document.getElementById('settings-ai-provider');
+                var statusEl = document.getElementById('ai-config-status');
+                if (data.provider) providerEl.value = data.provider;
+                if (data.model) document.getElementById('settings-ai-model').value = data.model;
+                if (data.has_key) {
+                    statusEl.innerHTML = '<span style="color:#28a745;">&#10003; API key saved</span>';
+                    document.getElementById('settings-ai-api-key').placeholder = '••••••••  (key saved)';
+                } else {
+                    statusEl.innerHTML = '<span style="color:#dc3545;">No API key configured</span>';
+                }
+                updateAiProviderPlaceholder();
+            }
+        });
+    }
+
+    function saveAiConfig() {
+        var provider = document.getElementById('settings-ai-provider').value;
+        var apiKey = document.getElementById('settings-ai-api-key').value.trim();
+        var model = document.getElementById('settings-ai-model').value.trim();
+
+        if (!apiKey) {
+            showToast('Please enter an API key', 'error');
+            return;
+        }
+
+        fetch('/api/settings/ai_config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({provider: provider, api_key: apiKey, model: model || null})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                showToast('AI configuration saved!', 'success');
+                document.getElementById('settings-ai-api-key').value = '';
+                loadAiConfig();
+                // Clear old localStorage keys
+                ['anthropic', 'openai', 'gemini'].forEach(function(p) {
+                    localStorage.removeItem('api_key_' + p);
+                });
+            } else {
+                showToast(data.message || 'Failed to save', 'error');
+            }
+        });
+    }
+
+    function removeAiConfig() {
+        fetch('/api/settings/ai_config', {method: 'DELETE'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                showToast('AI configuration removed', 'info');
+                loadAiConfig();
+            }
+        });
+    }
+
+    function toggleApiKeyVisibility() {
+        var input = document.getElementById('settings-ai-api-key');
+        var btn = document.getElementById('api-key-toggle-btn');
+        if (input.type === 'password') {
+            input.type = 'text';
+            btn.textContent = 'Hide';
+        } else {
+            input.type = 'password';
+            btn.textContent = 'Show';
+        }
+    }
+
+    function updateAiProviderPlaceholder() {
+        var provider = document.getElementById('settings-ai-provider').value;
+        var input = document.getElementById('settings-ai-api-key');
+        if (!input.value && !input.placeholder.includes('saved')) {
+            if (provider === 'anthropic') input.placeholder = 'sk-ant-...';
+            else if (provider === 'openai') input.placeholder = 'sk-proj-...';
+            else if (provider === 'gemini') input.placeholder = 'AIzaSy...';
+        }
+    }
+
+    // --- Collapsible card toggle ---
+    function toggleCardBody(bodyId, titleEl) {
+        var body = document.getElementById(bodyId);
+        var arrow = titleEl.querySelector('.arrow');
+        var isCollapsed = body.classList.contains('collapsed');
+        body.classList.toggle('collapsed');
+        if (arrow) arrow.style.transform = isCollapsed ? 'rotate(90deg)' : '';
+        // Lazy-load content on first expand
+        if (isCollapsed) {
+            if (bodyId === 'resume-rules-body') loadDataFile('resume_rules', 'settings-resume-rules');
+            else if (bodyId === 'candidate-db-body') loadDataFile('candidate_database', 'settings-candidate-db');
+            else if (bodyId === 'cover-letter-db-body') loadDataFile('cover_letter_database', 'settings-cover-letter-db');
+            else if (bodyId === 'parser-mgmt-body') loadParsers();
+            else if (bodyId === 'mcp-key-body') loadMcpKey();
+            else if (bodyId === 'jd-history-body') loadJdSessions();
+        }
+    }
+
+    // --- Data file editors ---
+    function loadDataFile(endpoint, textareaId) {
+        fetch('/api/settings/' + endpoint)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                document.getElementById(textareaId).value = data.content || '';
+            }
+        });
+    }
+
+    function saveDataFile(endpoint, textareaId) {
+        var content = document.getElementById(textareaId).value;
+        fetch('/api/settings/' + endpoint, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content: content})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            showToast(data.message || 'Saved', data.status === 'success' ? 'success' : 'error');
+        });
+    }
+
+    // --- Parser Management ---
+    function loadParsers() {
+        fetch('/api/parser/list')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var container = document.getElementById('parser-list');
+            if (data.status !== 'success' || !data.parsers || data.parsers.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#aaa; padding:12px 0; font-size:0.85em;">No parsers yet. Upload a resume to generate one.</div>';
+                return;
+            }
+            var html = '';
+            data.parsers.forEach(function(p) {
+                var stateClass = p.state.toLowerCase();
+                var actions = '';
+                if (p.state === 'DRAFT' || p.state === 'ACTIVE') {
+                    actions += '<button onclick="parserAction(\'lock\', ' + p.id + ')" style="background:#28a745;">Lock</button>';
+                }
+                if (p.state === 'LOCKED') {
+                    actions += '<button onclick="parserAction(\'unlock\', ' + p.id + ')" style="background:#ffc107; color:#333;">Unlock</button>';
+                }
+                if (p.state !== 'LOCKED') {
+                    actions += '<button onclick="parserAction(\'discard\', ' + p.id + ')" style="background:#dc3545;">Delete</button>';
+                }
+                var label = p.label || ('Parser #' + p.id);
+                var date = p.created_at ? p.created_at.split('T')[0] : '';
+                html += '<div class="parser-item">' +
+                    '<div><div>' + label + '</div><div style="font-size:0.78em; color:#999;">' + date + '</div></div>' +
+                    '<div style="display:flex; align-items:center; gap:6px;">' +
+                        '<span class="state ' + stateClass + '">' + p.state + '</span>' +
+                        '<span class="parser-actions">' + actions + '</span>' +
+                    '</div>' +
+                '</div>';
+            });
+            container.innerHTML = html;
+        });
+    }
+
+    function parserAction(action, parserId) {
+        fetch('/api/parser/' + action, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({parser_id: parserId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            showToast(data.message || (data.status === 'success' ? 'Done' : 'Failed'), data.status === 'success' ? 'success' : 'error');
+            loadParsers();
+        });
+    }
+
+    // --- MCP Key ---
+    var _mcpKey = '';
+    function loadMcpKey() {
+        fetch('/api/mcp_key')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            _mcpKey = data.mcp_api_key || '';
+            var display = document.getElementById('mcp-key-display');
+            if (_mcpKey) {
+                display.textContent = _mcpKey.substring(0, 8) + '...' + _mcpKey.substring(_mcpKey.length - 4);
+            } else {
+                display.textContent = 'No key generated yet.';
+            }
+        });
+    }
+
+    function copyMcpKey() {
+        if (!_mcpKey) { showToast('No key to copy', 'error'); return; }
+        navigator.clipboard.writeText(_mcpKey).then(function() {
+            showToast('MCP key copied to clipboard', 'success');
+        });
+    }
+
+    function regenerateMcpKey() {
+        fetch('/api/mcp_key/regenerate', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            _mcpKey = data.mcp_api_key || '';
+            showToast('MCP key regenerated', 'success');
+            loadMcpKey();
+        });
+    }
+
+    // --- JD Session History ---
+    function loadJdSessions() {
+        fetch('/api/jd_sessions')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var container = document.getElementById('jd-sessions-list');
+            if (data.status !== 'success' || !data.sessions || data.sessions.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#aaa; padding:12px 0; font-size:0.85em;">No JD analyses yet.</div>';
+                return;
+            }
+            var html = '';
+            data.sessions.forEach(function(s) {
+                var date = s.created_at ? s.created_at.split('T')[0] : '';
+                var preview = (s.jd_preview || '').substring(0, 100);
+                var scoreColor = (s.match_score || 0) >= 80 ? '#28a745' : (s.match_score || 0) >= 60 ? '#ffc107' : '#dc3545';
+                html += '<div class="jd-session-item">' +
+                    '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+                        '<span style="font-size:0.82em; color:#666;">' + date + '</span>' +
+                        (s.match_score != null ? '<span style="font-weight:700; color:' + scoreColor + ';">' + s.match_score + '/100</span>' : '<span style="color:#aaa;">--</span>') +
+                    '</div>' +
+                    '<div style="font-size:0.82em; color:#888; margin-top:4px; line-height:1.3;">' + preview + (preview.length >= 100 ? '...' : '') + '</div>' +
+                '</div>';
+            });
+            container.innerHTML = html;
+        });
+    }
+
+    // --- Version Diff Viewer ---
+    function checkAgentDiff() {
+        fetch('/api/jd_agent/diff')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status !== 'success' || !data.has_changes) return;
+            var diffBar = document.getElementById('diff-notification');
+            if (!diffBar) {
+                diffBar = document.createElement('div');
+                diffBar.id = 'diff-notification';
+                diffBar.style.cssText = 'padding:8px 16px; background:#fff3cd; border-bottom:1px solid #ffc107; font-size:0.85em; display:flex; justify-content:space-between; align-items:center;';
+                var toolbar = document.querySelector('.toolbar');
+                if (toolbar) toolbar.parentNode.insertBefore(diffBar, toolbar.nextSibling);
+            }
+            var count = data.changes.length;
+            diffBar.innerHTML = '<span>You made ' + count + ' change(s) to the agent-generated resume.</span>' +
+                '<span>' +
+                    '<button onclick="showDiffDetails()" style="background:#007bff; font-size:0.82em; padding:4px 10px; margin-right:6px;">View Changes</button>' +
+                    '<button onclick="dismissDiff()" style="background:#6c757d; font-size:0.82em; padding:4px 10px;">Dismiss</button>' +
+                '</span>';
+            window._agentDiffData = data.changes;
+        });
+    }
+
+    function showDiffDetails() {
+        var changes = window._agentDiffData || [];
+        if (!changes.length) return;
+        var html = '<div style="padding:10px;">';
+        changes.forEach(function(c) {
+            html += '<div class="diff-item">';
+            html += '<div class="diff-type">' + (c.type || '?') + '</div>';
+            html += '<div><strong>' + (c.section || '?') + '</strong></div>';
+            if (c.type === 'bullets_changed') {
+                if (c.added && c.added.length) {
+                    c.added.forEach(function(b) { html += '<div style="color:#28a745; font-size:0.82em;">+ ' + b.substring(0, 120) + '</div>'; });
+                }
+                if (c.removed && c.removed.length) {
+                    c.removed.forEach(function(b) { html += '<div style="color:#dc3545; font-size:0.82em;">- ' + b.substring(0, 120) + '</div>'; });
+                }
+            } else if (c.type === 'reordered') {
+                html += '<div style="font-size:0.82em; color:#666;">Reordered items</div>';
+            } else if (c.type === 'rewritten') {
+                html += '<div style="font-size:0.82em; color:#666;">Section was rewritten</div>';
+            } else if (c.type === 'selection_changed') {
+                if (c.added && c.added.length) html += '<div style="color:#28a745; font-size:0.82em;">Added: ' + c.added.join(', ') + '</div>';
+                if (c.removed && c.removed.length) html += '<div style="color:#dc3545; font-size:0.82em;">Removed: ' + c.removed.join(', ') + '</div>';
+            }
+            html += '</div>';
+        });
+        html += '<div style="margin-top:12px;">';
+        html += '<label style="display:block; font-size:0.82em; font-weight:600; margin-bottom:4px;">Why did you make these changes? (helps the AI learn)</label>';
+        html += '<input type="text" id="diff-reason" placeholder="e.g. Reordered projects by relevance" style="width:100%; padding:6px; font-size:0.88em;">';
+        html += '<button onclick="submitDiffLearning()" style="width:100%; margin-top:8px; background:#28a745; border-radius:6px; padding:7px; font-size:0.85em;">Save Learning</button>';
+        html += '</div></div>';
+        showToastModal('Changes from Agent Version', html);
+    }
+
+    function showToastModal(title, bodyHtml) {
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:3000; display:flex; align-items:center; justify-content:center;';
+        modal.innerHTML = '<div style="background:#fff; border-radius:12px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,0.2);">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid #eee;">' +
+                '<h3 style="margin:0; font-size:1em;">' + title + '</h3>' +
+                '<button onclick="this.closest(\'div[style]\').parentElement.remove()" style="background:none; border:none; font-size:1.2em; cursor:pointer; color:#666; padding:0;">&times;</button>' +
+            '</div>' +
+            bodyHtml +
+        '</div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+    }
+
+    function submitDiffLearning() {
+        var reason = document.getElementById('diff-reason').value.trim();
+        if (!reason) { showToast('Please explain why you made the changes', 'error'); return; }
+        fetch('/api/jd_agent/learn', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({reason: reason, tags: []})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            showToast(data.message || 'Learning saved', data.status === 'success' ? 'success' : 'error');
+            var modal = document.querySelector('div[style*="z-index:3000"]');
+            if (modal) modal.remove();
+            dismissDiff();
+        });
+    }
+
+    function dismissDiff() {
+        var bar = document.getElementById('diff-notification');
+        if (bar) bar.remove();
+    }
+
+    function populateSettingsForm() {
+        if (!currentSettings) return;
+        var h = currentSettings.header || {};
+        var c = h.contact || {};
+        var s = currentSettings.section_names || {};
+
+        document.getElementById('settings-name').value = h.name || '';
+        document.getElementById('settings-location').value = c.location || '';
+        document.getElementById('settings-phone').value = c.phone || '';
+        document.getElementById('settings-email').value = c.email || '';
+        document.getElementById('settings-github').value = c.github || '';
+        document.getElementById('settings-linkedin').value = c.linkedin || '';
+        document.getElementById('settings-portfolio-label').value = c.portfolio_label || 'Portfolio';
+        document.getElementById('settings-portfolio-url').value = c.portfolio_url || '';
+
+        document.getElementById('section-education').value = s.education || 'Education';
+        document.getElementById('section-technical_skills').value = s.technical_skills || 'Skills';
+        document.getElementById('section-experience').value = s.experience || 'Experience';
+        document.getElementById('section-projects').value = s.projects || 'Projects';
+        document.getElementById('section-extracurricular').value = s.extracurricular || 'Extracurricular';
+    }
+
+    // --- Custom Sections Management ---
+    function renderCustomSections() {
+        var container = document.getElementById('custom-sections-list');
+        container.innerHTML = '';
+        if (customSections.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#aaa; font-size:0.85em; padding:12px 0;">No custom sections yet.</div>';
+            return;
+        }
+        customSections.forEach(function(cs, idx) {
+            var div = document.createElement('div');
+            div.className = 'custom-section-item';
+            div.innerHTML =
+                '<div class="cs-header">' +
+                    '<strong>' + (cs.display_name || cs.key) + '</strong>' +
+                    '<button class="cs-remove-btn" onclick="removeCustomSection(' + idx + ')">Remove</button>' +
+                '</div>' +
+                '<div class="cs-field">' +
+                    '<label>YAML Key</label>' +
+                    '<input type="text" value="' + cs.key + '" onchange="customSections[' + idx + '].key=this.value">' +
+                '</div>' +
+                '<div class="cs-field">' +
+                    '<label>Display Name</label>' +
+                    '<input type="text" value="' + cs.display_name + '" onchange="customSections[' + idx + '].display_name=this.value; this.closest(\'.custom-section-item\').querySelector(\'.cs-header strong\').textContent=this.value">' +
+                '</div>' +
+                '<div class="cs-field">' +
+                    '<label>Render Type</label>' +
+                    '<select onchange="customSections[' + idx + '].render_type=this.value">' +
+                        '<option value="bullets"' + (cs.render_type==='bullets'?' selected':'') + '>Bullets (simple list)</option>' +
+                        '<option value="entries"' + (cs.render_type==='entries'?' selected':'') + '>Entries (title/date + bullets)</option>' +
+                        '<option value="skills"' + (cs.render_type==='skills'?' selected':'') + '>Skills (category: items)</option>' +
+                    '</select>' +
+                '</div>';
+            container.appendChild(div);
+        });
+    }
+
+    function addCustomSection() {
+        var name = prompt("Section name (e.g., Certifications):");
+        if (!name || !name.trim()) return;
+        var key = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        if (!key) { showToast('Invalid section name', 'error'); return; }
+        if (BUILTIN_KEYS.indexOf(key) !== -1) {
+            showToast('Cannot use "' + key + '" -- it conflicts with a built-in section.', 'error');
+            return;
+        }
+        if (customSections.some(function(cs) { return cs.key === key; })) {
+            showToast('A custom section with key "' + key + '" already exists.', 'error');
+            return;
+        }
+        customSections.push({
+            key: key,
+            display_name: name.trim().toUpperCase(),
+            render_type: 'bullets'
+        });
+        renderCustomSections();
+        showToast('Added custom section: ' + name.trim(), 'success');
+    }
+
+    function removeCustomSection(idx) {
+        if (!confirm('Remove custom section "' + customSections[idx].display_name + '"?')) return;
+        customSections.splice(idx, 1);
+        renderCustomSections();
+    }
+
+    function saveSettings() {
+        var header = {
+            name: document.getElementById('settings-name').value,
+            contact: {
+                location: document.getElementById('settings-location').value,
+                phone: document.getElementById('settings-phone').value,
+                email: document.getElementById('settings-email').value,
+                github: document.getElementById('settings-github').value,
+                linkedin: document.getElementById('settings-linkedin').value,
+                portfolio_label: document.getElementById('settings-portfolio-label').value,
+                portfolio_url: document.getElementById('settings-portfolio-url').value,
+            }
+        };
+        var section_names = {
+            education: document.getElementById('section-education').value,
+            technical_skills: document.getElementById('section-technical_skills').value,
+            experience: document.getElementById('section-experience').value,
+            projects: document.getElementById('section-projects').value,
+            extracurricular: document.getElementById('section-extracurricular').value,
+        };
+        // Include custom section display names in section_names
+        customSections.forEach(function(cs) {
+            section_names[cs.key] = cs.display_name;
+        });
+
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ header: header, section_names: section_names, custom_sections: customSections })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                currentSettings = { header: header, section_names: section_names, custom_sections: customSections };
+                renderHeaderPreview();
+                updatePreview();
+                showToast('Settings saved!', 'success');
+                document.getElementById('settings-panel').classList.remove('open');
+            } else {
+                showToast('Error: ' + data.message, 'error');
+            }
+        });
+    }
+
+    function toggleSettings() {
+        var panel = document.getElementById('settings-panel');
+        var wasOpen = panel.classList.contains('open');
+        closeAllPanels();
+        if (!wasOpen) {
+            panel.classList.add('open');
+            loadSettings();
+        }
+    }
+
+    function closeAllPanels() {
+        document.getElementById('history-panel').classList.remove('open');
+        document.getElementById('jd-match-panel').classList.remove('open');
+        document.getElementById('settings-panel').classList.remove('open');
+    }
+
+    // Upload removed — PDF upload only happens during onboarding
+
+    function handleLogout() {
+        // Clear local autosave data before logging out
+        localStorage.removeItem('resume_autosave_content');
+        localStorage.removeItem('resume_autosave_keyword');
+        localStorage.removeItem('resume_autosave_jd');
+        // API keys are stored in DB now, no localStorage cleanup needed
+        window.location.href = '/logout';
+    }
+
+    // --- JD Input Mode Switching ---
+    var currentJDMode = 'paste';
+    function switchJDMode(mode) {
+        currentJDMode = mode;
+        ['paste', 'search', 'url'].forEach(function(m) {
+            document.getElementById('jd-input-' + m).style.display = m === mode ? 'block' : 'none';
+            var btn = document.getElementById('jd-mode-' + m);
+            if (m === mode) {
+                btn.style.background = 'white';
+                btn.style.color = '#1e40af';
+                btn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            } else {
+                btn.style.background = 'transparent';
+                btn.style.color = '#6b7280';
+                btn.style.boxShadow = 'none';
+            }
+        });
+        // Show/hide the paste-mode action buttons
+        document.getElementById('jd-action-buttons').style.display = mode === 'paste' ? 'block' : 'none';
+    }
+
+    function findJD(mode) {
+        var payload = {};
+        var provider = document.getElementById('ai-provider').value;
+        var model = document.getElementById('ai-model').value;
+        if (model === 'custom') model = document.getElementById('custom-model-name').value;
+
+        if (mode === 'search') {
+            var company = document.getElementById('jd-company').value.trim();
+            var role = document.getElementById('jd-role').value.trim();
+            if (!company || !role) { showToast('Enter both company and role.', 'error'); return; }
+            payload = { company: company, role: role, provider: provider, model: model };
+        } else {
+            var url = document.getElementById('jd-url').value.trim();
+            if (!url) { showToast('Enter a job posting URL.', 'error'); return; }
+            payload = { url: url, provider: provider, model: model };
+        }
+
+        var statusDiv = document.getElementById('jd-finder-status');
+        statusDiv.style.display = 'block';
+        statusDiv.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><div class="loader"></div> Searching and generating resume... This may take a minute.</div>';
+
+        fetch('/api/jd_find', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                // Load the generated resume into the editor
+                if (data.yaml) {
+                    editor.setValue(data.yaml, -1);
+                    updatePreview();
+                    saveStateToLocal();
+                }
+                // Show the extracted JD in the paste tab for reference
+                if (data.jd_text) {
+                    document.getElementById('jd-text').value = data.jd_text;
+                    localStorage.setItem('resume_autosave_jd', data.jd_text);
+                }
+
+                var scoreHtml = '';
+                if (data.ats_score !== undefined) {
+                    scoreHtml = '<div style="font-size:1.8em;font-weight:700;color:' + getScoreColor(data.ats_score) + ';">' + data.ats_score + '/100</div>';
+                }
+
+                statusDiv.innerHTML =
+                    '<div style="text-align:center;">' +
+                        scoreHtml +
+                        '<div style="color:#059669;font-weight:600;margin-bottom:6px;">Resume generated!</div>' +
+                        (data.jd_url ? '<div style="font-size:0.82em;color:#6b7280;word-break:break-all;">Source: ' + data.jd_url + '</div>' : '') +
+                        (data.tags ? '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">' + data.tags.map(function(t){ return '<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:12px;font-size:0.8em;">' + t + '</span>'; }).join('') + '</div>' : '') +
+                        '<div style="margin-top:8px;font-size:0.82em;color:#9ca3af;">Pages: ' + (data.pages || '?') + ' | Iterations: ' + (data.iterations || '?') + '</div>' +
+                    '</div>';
+
+                showToast('Resume generated from JD!', 'success');
+                lastAgentGenTime = Date.now();
+            } else {
+                statusDiv.innerHTML = '<div style="color:#ef4444;">' + (data.message || 'Failed to find JD.') + '</div>';
+                showToast(data.message || 'Failed', 'error');
+            }
+        })
+        .catch(function(err) {
+            statusDiv.innerHTML = '<div style="color:#ef4444;">Error: ' + err.message + '</div>';
+            showToast('Error: ' + err.message, 'error');
+        });
+    }
+
+    // --- Initial Load ---
+    loadSettings();
+    loadAiConfig();
+    updatePreview();
+    checkAgentDiff();
+
+    // --- Auto-save ---
+    function saveStateToLocal() {
+        localStorage.setItem('resume_autosave_content', editor.getValue());
+        localStorage.setItem('resume_autosave_keyword', document.getElementById('save-keyword').value);
+    }
+
+    function restoreStateFromLocal() {
+        var savedContent = localStorage.getItem('resume_autosave_content');
+        var savedKeyword = localStorage.getItem('resume_autosave_keyword');
+
+        if (savedContent) {
+            editor.setValue(savedContent, -1);
+        }
+        if (savedKeyword) {
+            document.getElementById('save-keyword').value = savedKeyword;
+        }
+
+        var savedJD = localStorage.getItem('resume_autosave_jd');
+        if (savedJD) {
+            document.getElementById('jd-text').value = savedJD;
+        }
+    }
+
+    var timeout = null;
+    editor.session.on('change', function() {
+        saveStateToLocal();
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(updatePreview, 1000);
+    });
+
+    document.getElementById('save-keyword').addEventListener('input', saveStateToLocal);
+    document.getElementById('jd-text').addEventListener('input', function() {
+        localStorage.setItem('resume_autosave_jd', this.value);
+    });
+
+    window.addEventListener('DOMContentLoaded', function() {
+        restoreStateFromLocal();
+        loadProviderSettings();
+        renderCustomSections();
+    });
+
+    function getStyle() {
+        return {
+            font_family: document.getElementById('font-family').value,
+            font_size: document.getElementById('font-size').value,
+            line_height: document.getElementById('line-height').value,
+            margin: document.getElementById('margin').value,
+            accent_color: document.getElementById('accent-color').value
+        };
+    }
+
+    function updatePreview() {
+        var resumeYaml = editor.getValue();
+        var style = getStyle();
+
+        fetch('/api/preview', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ resume: resumeYaml, style: style })
+        })
+        .then(function(response) { return response.text(); })
+        .then(function(html) {
+            var iframe = document.getElementById('preview-frame');
+            iframe.contentDocument.open();
+            iframe.contentDocument.write(html);
+            iframe.contentDocument.close();
+        })
+        .catch(function(err) { console.error(err); });
+    }
+
+    function saveResume() {
+        var resumeYaml = editor.getValue();
+        var keyword = document.getElementById('save-keyword').value || 'default';
+
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ resume: resumeYaml, keyword: keyword })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            showToast(data.message, 'success');
+            loadHistory();
+        });
+    }
+
+    function openLiveView() {
+        var resumeYaml = editor.getValue();
+        var style = getStyle();
+        var keyword = document.getElementById('save-keyword').value;
+
+        fetch('/api/download_pdf', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ resume: resumeYaml, style: style, keyword: keyword, inline: true })
+        })
+        .then(function(response) {
+            if (!response.ok) throw new Error('Failed to generate PDF');
+            return response.blob();
+        })
+        .then(function(blob) {
+            var url = window.URL.createObjectURL(blob);
+            var modal = document.getElementById('live-view-modal');
+            var iframe = document.getElementById('live-view-frame');
+            iframe.src = url;
+            modal.style.display = 'flex';
+        })
+        .catch(function(err) { console.error(err); });
+    }
+
+    function closeLiveView() {
+        var modal = document.getElementById('live-view-modal');
+        var iframe = document.getElementById('live-view-frame');
+        modal.style.display = 'none';
+        iframe.src = '';
+    }
+
+    function downloadPDF() {
+        var resumeYaml = editor.getValue();
+        var style = getStyle();
+        var keyword = document.getElementById('save-keyword').value;
+
+        fetch('/api/download_pdf', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ resume: resumeYaml, style: style, keyword: keyword })
+        })
+        .then(function(response) {
+            var contentDisposition = response.headers.get('Content-Disposition');
+            var filename = "resume.pdf";
+            if (contentDisposition) {
+                var filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch && filenameMatch.length === 2)
+                    filename = filenameMatch[1];
+            }
+            return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
+        })
+        .then(function(result) {
+            var url = window.URL.createObjectURL(result.blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = result.filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
+    }
+
+    function toggleHistory() {
+        var panel = document.getElementById('history-panel');
+        var wasOpen = panel.classList.contains('open');
+        closeAllPanels();
+        if (!wasOpen) {
+            panel.classList.add('open');
+            loadHistory();
+        }
+    }
+
+    function loadHistory() {
+        fetch('/api/history')
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            var list = document.getElementById('history-list');
+            list.innerHTML = '';
+            if (data.length === 0) {
+                list.innerHTML = '<div style="padding:10px; text-align:center; color:#999;">No saved versions found.</div>';
+                return;
+            }
+            data.forEach(function(item) {
+                var div = document.createElement('div');
+                div.className = 'history-item';
+
+                var displayName = item.filename;
+                var match = item.filename.match(/^(.+?)_(\d{8}_\d{6})\.yaml$/);
+                if (match) {
+                    displayName = match[1].replace(/_/g, ' ');
+                }
+
+                div.innerHTML =
+                    '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+                        '<strong>' + displayName + '</strong>' +
+                        '<div>' +
+                            '<button onclick="event.stopPropagation(); loadVersion(\'' + item.filename + '\')" style="padding:2px 6px; font-size:0.7em;">Restore</button>' +
+                            '<button onclick="event.stopPropagation(); deleteVersion(\'' + item.filename + '\')" style="padding:2px 6px; font-size:0.7em; background:#dc3545; margin-left:5px;">Delete</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="history-timestamp" style="font-size:0.75em; margin-top:2px;">' + item.timestamp + '</div>';
+                div.onclick = function() { loadVersion(item.filename); };
+                list.appendChild(div);
+            });
+        });
+    }
+
+    function deleteVersion(filename) {
+        if (!confirm('Are you sure you want to delete ' + filename + '?')) return;
+
+        fetch('/api/delete_version/' + filename, { method: 'DELETE' })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                loadHistory();
+                showToast('Version deleted.', 'info');
+            } else {
+                showToast(data.message, 'error');
+            }
+        });
+    }
+
+    function toggleJDMatch() {
+        var panel = document.getElementById('jd-match-panel');
+        var wasOpen = panel.classList.contains('open');
+        closeAllPanels();
+        if (!wasOpen) {
+            panel.classList.add('open');
+            loadProviderSettings();
+        }
+    }
+
+    var PROVIDER_MODELS = {
+        'anthropic': [
+            { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (Fastest)' },
+            { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Balanced)' },
+            { value: 'claude-opus-4-6', label: 'Claude Opus 4.6 (Most Capable)' },
+            { value: 'custom', label: 'Custom Model...' }
+        ],
+        'openai': [
+            { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast & Affordable)' },
+            { value: 'gpt-4o', label: 'GPT-4o (Flagship)' },
+            { value: 'o3-mini', label: 'o3-mini (Reasoning)' },
+            { value: 'custom', label: 'Custom Model...' }
+        ],
+        'gemini': [
+            { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Latest)' },
+            { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite (Fastest)' },
+            { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Most Capable)' },
+            { value: 'custom', label: 'Custom Model...' }
+        ]
+    };
+
+    function updateProviderSettings() {
+        var provider = document.getElementById('ai-provider').value;
+        var modelSelect = document.getElementById('ai-model');
+
+        // Update AI config status in JD panel
+        var statusDiv = document.getElementById('jd-ai-config-status');
+        if (statusDiv) {
+            fetch('/api/settings/ai_config')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.has_key) {
+                    statusDiv.innerHTML = '<span style="color:#28a745;">&#10003; API key configured (' + (data.provider || 'anthropic') + ')</span>';
+                } else {
+                    statusDiv.innerHTML = '<span style="color:#dc3545;">No API key configured. <a href="#" onclick="event.preventDefault(); toggleJDMatch(); toggleSettings();" style="color:#007bff;">Go to Settings</a></span>';
+                }
+            });
+        }
+
+        localStorage.setItem('selected_provider', provider);
+
+        var models = PROVIDER_MODELS[provider] || [];
+        modelSelect.innerHTML = '';
+        models.forEach(function(m) {
+            var option = document.createElement('option');
+            option.value = m.value;
+            option.textContent = m.label;
+            modelSelect.appendChild(option);
+        });
+
+        var savedModel = localStorage.getItem('selected_model_' + provider);
+        if (savedModel) {
+            if (models.some(function(m) { return m.value === savedModel; })) {
+                modelSelect.value = savedModel;
+            } else {
+                modelSelect.value = 'custom';
+            }
+        }
+        onModelChange();
+    }
+
+    function onModelChange() {
+        var provider = document.getElementById('ai-provider').value;
+        var model = document.getElementById('ai-model').value;
+        var customModelContainer = document.getElementById('custom-model-container');
+        var customModelInput = document.getElementById('custom-model-name');
+
+        if (model === 'custom') {
+            customModelContainer.style.display = 'block';
+            var savedCustomName = localStorage.getItem('custom_model_name_' + provider);
+            if (savedCustomName) customModelInput.value = savedCustomName;
+        } else {
+            customModelContainer.style.display = 'none';
+        }
+        localStorage.setItem('selected_model_' + provider, model);
+    }
+
+    function onCustomModelChange() {
+        var provider = document.getElementById('ai-provider').value;
+        var customName = document.getElementById('custom-model-name').value;
+        localStorage.setItem('custom_model_name_' + provider, customName);
+    }
+
+    function loadProviderSettings() {
+        // Load saved provider preference from AI config
+        fetch('/api/settings/ai_config')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.provider) {
+                document.getElementById('ai-provider').value = data.provider;
+            }
+            updateProviderSettings();
+        })
+        .catch(function() {
+            updateProviderSettings();
+        });
+    }
+
+    function analyzeCurrentResume() {
+        var resumeYaml = editor.getValue();
+        var jdText = document.getElementById('jd-text').value;
+        var provider = document.getElementById('ai-provider').value;
+
+        if (!jdText) {
+            showToast("Please enter a Job Description", 'error');
+            return;
+        }
+
+        var model = document.getElementById('ai-model').value;
+        if (model === 'custom') {
+            model = document.getElementById('custom-model-name').value;
+        }
+
+        var resultsDiv = document.getElementById('match-results');
+        resultsDiv.innerHTML = '<div style="text-align:center;">Analyzing... <div class="loader"></div></div>';
+
+        // API key is resolved server-side from settings; pass provider/model as hints
+        fetch('/api/analyze_resume', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                resume: resumeYaml,
+                jd_text: jdText,
+                provider: provider,
+                model: model
+            })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.status === 'error') {
+                resultsDiv.innerHTML = '<div style="color:red">Error: ' + data.message + '</div>';
+                return;
+            }
+
+            var res = data.result;
+            var html =
+                '<div style="border: 1px solid #ccc; padding: 15px; border-radius: 5px; background: #f8f9fa;">' +
+                    '<div style="text-align: center; margin-bottom: 15px;">' +
+                        '<div style="font-size: 2.5em; font-weight: bold; color: ' + getScoreColor(res.score) + '">' + res.score + '/100</div>' +
+                        '<div style="font-size: 0.9em; color: #666;">ATS Compatibility Score</div>' +
+                    '</div>' +
+                    '<div style="margin-bottom: 15px;">' +
+                        '<strong>Missing Keywords:</strong>' +
+                        '<div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;">' +
+                            res.missing_keywords.map(function(k) { return '<span style="background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">' + k + '</span>'; }).join('') +
+                        '</div>' +
+                    '</div>' +
+                    '<div>' +
+                        '<strong>Suggestions:</strong>' +
+                        '<ul style="margin-top: 5px; padding-left: 20px;">' +
+                            res.suggestions.map(function(s) { return '<li>' + s + '</li>'; }).join('') +
+                        '</ul>' +
+                    '</div>' +
+                '</div>';
+            resultsDiv.innerHTML = html;
+        })
+        .catch(function(err) {
+            resultsDiv.innerHTML = '<div style="color:red">Error: ' + err.message + '</div>';
+        });
+    }
+
+    function getScoreColor(score) {
+        if (score >= 80) return '#2ecc71';
+        if (score >= 60) return '#f39c12';
+        return '#e74c3c';
+    }
+
+    var currentMatchResults = [];
+    var renderedCount = 0;
+
+    function analyzeJD() {
+        var provider = document.getElementById('ai-provider').value;
+        var jdText = document.getElementById('jd-text').value;
+        var resultsDiv = document.getElementById('match-results');
+
+        if (!jdText) { showToast("Please paste the Job Description", 'error'); return; }
+
+        var model = document.getElementById('ai-model').value;
+        if (model === 'custom') {
+            model = document.getElementById('custom-model-name').value;
+        }
+
+        resultsDiv.innerHTML = '<div style="text-align:center;">Analyzing... (this may take a moment)</div>';
+        currentMatchResults = [];
+        renderedCount = 0;
+
+        fetch('/api/match_jd', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ jd_text: jdText, provider: provider, model: model })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                currentMatchResults = data.results;
+                resultsDiv.innerHTML = '<h4>Match Results</h4><div id="results-list"></div><div id="load-more-container" style="text-align:center; margin-top:10px;"></div>';
+
+                if (currentMatchResults.length === 0) {
+                    resultsDiv.innerHTML += '<p>No matches found.</p>';
+                } else {
+                    showNextBatch();
+                }
+            } else {
+                resultsDiv.innerHTML = '<div style="color:red;">Error: ' + data.message + '</div>';
+            }
+        })
+        .catch(function(err) {
+            resultsDiv.innerHTML = '<div style="color:red;">Error: ' + err.message + '</div>';
+        });
+    }
+
+    function showNextBatch() {
+        var batchSize = 3;
+        var nextBatch = currentMatchResults.slice(renderedCount, renderedCount + batchSize);
+        if (nextBatch.length === 0) return;
+
+        var loadMoreContainer = document.getElementById('load-more-container');
+        var needsAnalysis = nextBatch.filter(function(r) { return !r.improvements || r.improvements.length === 0; });
+
+        if (needsAnalysis.length > 0) {
+            loadMoreContainer.innerHTML = '<span>Analyzing details for next batch...</span>';
+
+            var filenames = needsAnalysis.map(function(r) { return r.filename; });
+            var provider = document.getElementById('ai-provider').value;
+            var jdText = document.getElementById('jd-text').value;
+            var model = document.getElementById('ai-model').value;
+            if (model === 'custom') model = document.getElementById('custom-model-name').value;
+
+            fetch('/api/analyze_selection', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ jd_text: jdText, provider: provider, filenames: filenames, model: model })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.status === 'success') {
+                    var detailsMap = {};
+                    data.results.forEach(function(d) { detailsMap[d.filename] = d; });
+                    nextBatch.forEach(function(r) {
+                        if (detailsMap[r.filename]) {
+                            r.reasoning = detailsMap[r.filename].reasoning;
+                            r.improvements = detailsMap[r.filename].improvements;
+                        }
+                    });
+                    renderBatch(nextBatch);
+                } else {
+                    renderBatch(nextBatch);
+                }
+            })
+            .catch(function() { renderBatch(nextBatch); });
+        } else {
+            renderBatch(nextBatch);
+        }
+    }
+
+    function renderBatch(batch) {
+        var container = document.getElementById('results-list');
+        var loadMoreContainer = document.getElementById('load-more-container');
+
+        batch.forEach(function(res) {
+            var improvementsHtml = '';
+            if (res.improvements && res.improvements.length > 0) {
+                improvementsHtml = '<ul style="font-size:0.85em; margin:5px 0; padding-left:20px; color:#444;">';
+                res.improvements.forEach(function(imp) {
+                    improvementsHtml += '<li>' + imp + '</li>';
+                });
+                improvementsHtml += '</ul>';
+            }
+
+            var itemHtml =
+                '<div class="history-item" style="cursor:default;">' +
+                    '<div style="display:flex; justify-content:space-between;">' +
+                        '<strong>' + res.filename.replace('.yaml', '') + '</strong>' +
+                        '<span style="background:' + getScoreColor(res.score) + '; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">' + res.score + '%</span>' +
+                    '</div>' +
+                    (res.reasoning ? '<div style="font-size:0.85em; color:#666; margin:4px 0;">' + res.reasoning + '</div>' : '') +
+                    improvementsHtml +
+                    '<div style="margin-top:8px; font-size:0.8em;">' +
+                        '<span style="color:#3498db; cursor:pointer;" onclick="loadVersion(\'' + res.filename + '\')">Load this version</span>' +
+                    '</div>' +
+                '</div>';
+            container.insertAdjacentHTML('beforeend', itemHtml);
+        });
+
+        renderedCount += batch.length;
+
+        if (renderedCount < currentMatchResults.length) {
+            loadMoreContainer.innerHTML = '<span style="color:#3498db; cursor:pointer; text-decoration:underline;" onclick="showNextBatch()">Load 3 more matches</span>';
+        } else {
+            loadMoreContainer.innerHTML = '';
+        }
+    }
+
+    function loadVersion(filename) {
+        if (!confirm('Load version ' + filename + '? Unsaved changes will be lost.')) return;
+
+        fetch('/api/load/' + filename)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                editor.setValue(data.content, -1);
+
+                var match = filename.match(/^(.+?)_(\d{8}_\d{6})\.yaml$/);
+                if (match) {
+                    var parts = match[1];
+                    var segments = parts.split('_');
+                    if (segments.length > 1) {
+                        document.getElementById('save-keyword').value = segments[segments.length - 1];
+                    }
+                }
+
+                updatePreview();
+                document.getElementById('history-panel').classList.remove('open');
+                showToast('Version loaded.', 'info');
+            } else {
+                showToast(data.message, 'error');
+            }
+        });
+    }
+
+    function toggleWrap() {
+        var session = editor.getSession();
+        session.setUseWrapMode(!session.getUseWrapMode());
+    }
+
+    function checkGrammar() {
+        var resumeYaml = editor.getValue();
+        var provider = document.getElementById('ai-provider').value;
+
+        var useLocal = confirm("Use Offline Grammar Check (LanguageTool)?\nOK = Offline, Cancel = AI Provider (" + provider + ")");
+
+        var selectedProvider = useLocal ? 'local' : provider;
+
+        var modal = document.getElementById('grammar-check-modal');
+        var resultsDiv = document.getElementById('grammar-results');
+
+        modal.style.display = 'flex';
+        resultsDiv.innerHTML = '<div style="text-align:center; padding:20px;">Analyzing content... Please wait.</div>';
+
+        fetch('/api/check_grammar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ resume: resumeYaml, provider: selectedProvider })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                if (data.results.length === 0) {
+                    resultsDiv.innerHTML = '<div style="text-align:center; color:green; padding:20px;"><h3>No errors found!</h3><p>Great job!</p></div>';
+                } else {
+                    var html = '<ul style="list-style:none; padding:0;">';
+                    data.results.forEach(function(item, index) {
+                        var safeOriginal = item.original.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                        var safeCorrection = item.correction.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+
+                        html +=
+                            '<li id="grammar-issue-' + index + '" style="border-bottom:1px solid #eee; padding:10px 0;">' +
+                                '<div style="display:flex; justify-content:space-between; align-items:baseline;">' +
+                                    '<strong style="color:#d9534f;">Issue #' + (index + 1) + '</strong>' +
+                                    '<span style="font-size:0.8em; color:#777;">' + (item.location || '') + '</span>' +
+                                '</div>' +
+                                '<div style="margin:5px 0; background:#fff3cd; padding:5px; border-left:3px solid #ffc107;">' +
+                                    '<strong>Original:</strong> "' + item.original + '"' +
+                                '</div>' +
+                                '<div style="margin:5px 0; background:#d4edda; padding:5px; border-left:3px solid #28a745;">' +
+                                    '<strong>Suggestion:</strong> "' + item.correction + '"' +
+                                '</div>' +
+                                '<div style="font-size:0.9em; color:#555; margin-top:5px;">' +
+                                    '<em>' + item.explanation + '</em>' +
+                                '</div>' +
+                                '<div style="margin-top:10px; display:flex; gap:10px;">' +
+                                    '<button onclick="acceptCorrection(\'' + safeOriginal + '\', \'' + safeCorrection + '\', \'grammar-issue-' + index + '\')" style="background:#28a745; font-size:0.9em; padding:4px 10px;">Accept</button>' +
+                                    '<button onclick="rejectCorrection(\'grammar-issue-' + index + '\')" style="background:#6c757d; font-size:0.9em; padding:4px 10px;">Reject</button>' +
+                                '</div>' +
+                            '</li>';
+                    });
+                    html += '</ul>';
+                    resultsDiv.innerHTML = html;
+                }
+            } else {
+                resultsDiv.innerHTML = '<div style="color:red; text-align:center;">Error: ' + data.message + '</div>';
+            }
+        })
+        .catch(function(err) {
+            resultsDiv.innerHTML = '<div style="color:red; text-align:center;">Error: ' + err.message + '</div>';
+        });
+    }
+
+    function acceptCorrection(original, correction, elementId) {
+        var content = editor.getValue();
+        if (content.includes(original)) {
+            var newContent = content.replace(original, correction);
+            editor.setValue(newContent, -1);
+            var el = document.getElementById(elementId);
+            if (el) {
+                el.style.opacity = '0.5';
+                el.style.pointerEvents = 'none';
+                el.innerHTML += '<div style="color:green; font-weight:bold; margin-top:5px;">Accepted</div>';
+            }
+            saveStateToLocal();
+            updatePreview();
+        } else {
+            showToast("Could not find exact text in editor. It might have been changed already.", 'error');
+        }
+    }
+
+    function rejectCorrection(elementId) {
+        var el = document.getElementById(elementId);
+        if (el) el.style.display = 'none';
+    }
+
+    function closeGrammarCheck() {
+        document.getElementById('grammar-check-modal').style.display = 'none';
+    }
+
+    // --- Feedback ---
+    function openFeedback() {
+        document.getElementById('feedback-modal').style.display = 'flex';
+        document.getElementById('feedback-text').value = '';
+    }
+    function closeFeedback() {
+        document.getElementById('feedback-modal').style.display = 'none';
+    }
+    function submitFeedback() {
+        var text = document.getElementById('feedback-text').value.trim();
+        if (!text) { showToast('Please enter your feedback.', 'error'); return; }
+
+        fetch('/api/feedback', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ feedback: text })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                showToast(data.message, 'success');
+                closeFeedback();
+            } else {
+                showToast('Error: ' + data.message, 'error');
+            }
+        })
+        .catch(function(err) {
+            showToast('Error: ' + err.message, 'error');
+        });
+    }
+
+    // --- Delete Profile ---
+    function showDeleteProfile() {
+        document.getElementById('delete-profile-modal').style.display = 'flex';
+        document.getElementById('delete-confirm-text').value = '';
+        document.getElementById('delete-password').value = '';
+        document.getElementById('delete-error').textContent = '';
+        document.getElementById('delete-step-2').style.display = 'none';
+        document.getElementById('delete-step-1').style.display = 'block';
+    }
+    function closeDeleteProfile() {
+        document.getElementById('delete-profile-modal').style.display = 'none';
+    }
+    function deleteStep1() {
+        var text = document.getElementById('delete-confirm-text').value.trim();
+        if (text !== 'I agree to delete') {
+            document.getElementById('delete-error').textContent = 'Please type exactly: I agree to delete';
+            return;
+        }
+        document.getElementById('delete-step-1').style.display = 'none';
+        document.getElementById('delete-step-2').style.display = 'block';
+        document.getElementById('delete-error').textContent = '';
+    }
+    function deleteStep2() {
+        var password = document.getElementById('delete-password').value;
+        if (!password) {
+            document.getElementById('delete-error').textContent = 'Please enter your password.';
+            return;
+        }
+        document.getElementById('delete-error').textContent = '';
+
+        fetch('/api/delete_profile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ password: password })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                window.location.href = '/login';
+            } else {
+                document.getElementById('delete-error').textContent = data.message || 'Deletion failed.';
+            }
+        })
+        .catch(function(err) {
+            document.getElementById('delete-error').textContent = 'Error: ' + err.message;
+        });
+    }
+
+    // --- Cover Letter Generation ---
+    // --- Candidate Database & Resume Rules ---
+    function loadCandidateDB() {
+        fetch('/api/settings/candidate_database')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                document.getElementById('settings-candidate-db').value = data.content || '';
+                document.getElementById('settings-candidate-db').placeholder = data.content ? '' : 'No candidate database yet. Add your skills, projects, metrics here...';
+            }
+        });
+    }
+    function saveCandidateDB() {
+        var content = document.getElementById('settings-candidate-db').value;
+        fetch('/api/settings/candidate_database', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: content })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') showToast('Candidate database saved!', 'success');
+            else showToast('Error: ' + data.message, 'error');
+        });
+    }
+    function loadResumeRules() {
+        fetch('/api/settings/resume_rules')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                document.getElementById('settings-resume-rules').value = data.content || '';
+                document.getElementById('settings-resume-rules').placeholder = data.content ? '' : 'No rules yet. Add formatting and content preferences...';
+            }
+        });
+    }
+    function saveResumeRules() {
+        var content = document.getElementById('settings-resume-rules').value;
+        fetch('/api/settings/resume_rules', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: content })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') showToast('Resume rules saved!', 'success');
+            else showToast('Error: ' + data.message, 'error');
+        });
+    }
+
+    // --- Learning from Edits ---
+    var lastAgentGenTime = 0;
+
+    function checkForAgentEdits() {
+        // Only check if an agent generation happened recently in this session
+        if (!lastAgentGenTime || Date.now() - lastAgentGenTime > 600000) return;
+
+        fetch('/api/jd_agent/diff')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success' && data.has_changes) {
+                var banner = document.getElementById('learning-banner');
+                var diffDiv = document.getElementById('learning-diff');
+
+                var diffHtml = '<ul style="margin:0;padding-left:16px;">';
+                data.changes.forEach(function(c) {
+                    diffHtml += '<li><strong>' + c.section + '</strong>: ' + c.type;
+                    if (c.type === 'bullets_changed') {
+                        if (c.added && c.added.length) diffHtml += ' (+' + c.added.length + ' added)';
+                        if (c.removed && c.removed.length) diffHtml += ' (-' + c.removed.length + ' removed)';
+                    }
+                    diffHtml += '</li>';
+                });
+                diffHtml += '</ul>';
+                diffDiv.innerHTML = diffHtml;
+
+                banner.style.display = 'block';
+                banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        })
+        .catch(function() { /* ignore */ });
+    }
+
+    function submitLearning() {
+        var reason = document.getElementById('learning-reason').value.trim();
+        if (!reason) { showToast('Please describe what you changed and why.', 'error'); return; }
+
+        fetch('/api/jd_agent/learn', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ reason: reason, tags: [] })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                showToast('Thanks! Your feedback will improve future generations.', 'success');
+                dismissLearning();
+            } else {
+                showToast('Error: ' + data.message, 'error');
+            }
+        });
+    }
+
+    function dismissLearning() {
+        document.getElementById('learning-banner').style.display = 'none';
+        document.getElementById('learning-reason').value = '';
+        lastAgentGenTime = 0;
+    }
+
+    // Hook into existing save to check for agent edits
+    var _origSaveResume = saveResume;
+    saveResume = function() {
+        _origSaveResume();
+        // After save, check if user edited agent output
+        setTimeout(checkForAgentEdits, 1500);
+    };
+
+    // Load candidate DB and resume rules when settings panel opens
+    var _origToggleSettings = toggleSettings;
+    toggleSettings = function() {
+        _origToggleSettings();
+        if (document.getElementById('settings-panel').classList.contains('open')) {
+            loadCandidateDB();
+            loadResumeRules();
+        }
+    };
+</script>
+
+<!-- Feedback Modal -->
+<div id="feedback-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000; justify-content:center; align-items:center;">
+    <div style="background:white; width:440px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.2); overflow:hidden;">
+        <div style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0;">Send Feedback</h3>
+            <span onclick="closeFeedback()" style="cursor:pointer; font-size:1.4em; color:#999;">&times;</span>
+        </div>
+        <div style="padding:24px;">
+            <p style="color:#666; margin-top:0; font-size:0.9em;">Help us improve! Share your thoughts, report bugs, or suggest features.</p>
+            <textarea id="feedback-text" rows="5" placeholder="Your feedback..." style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em; resize:vertical;"></textarea>
+            <button onclick="submitFeedback()" style="width:100%; margin-top:14px; background:#007bff; padding:10px; border-radius:6px; font-weight:600;">Submit Feedback</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Profile Modal -->
+<div id="delete-profile-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000; justify-content:center; align-items:center;">
+    <div style="background:white; width:440px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.2); overflow:hidden;">
+        <div style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; color:#dc3545;">Delete Account</h3>
+            <span onclick="closeDeleteProfile()" style="cursor:pointer; font-size:1.4em; color:#999;">&times;</span>
+        </div>
+        <div style="padding:24px;">
+            <div id="delete-step-1">
+                <p style="color:#666; margin-top:0;">This will <strong>permanently delete</strong> your account and all resume data. This action cannot be undone.</p>
+                <label style="display:block; font-size:0.85em; font-weight:600; color:#555; margin-bottom:6px;">Type <strong style="color:#dc3545;">I agree to delete</strong> to confirm:</label>
+                <input type="text" id="delete-confirm-text" placeholder="I agree to delete" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em;">
+                <button onclick="deleteStep1()" style="width:100%; margin-top:14px; background:#dc3545; padding:10px; border-radius:6px; font-weight:600;">Continue</button>
+            </div>
+            <div id="delete-step-2" style="display:none;">
+                <p style="color:#666; margin-top:0;">Enter your password to confirm deletion:</p>
+                <input type="password" id="delete-password" placeholder="Your password" style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:0.9em;">
+                <button onclick="deleteStep2()" style="width:100%; margin-top:14px; background:#dc3545; padding:10px; border-radius:6px; font-weight:600;">Delete My Account</button>
+            </div>
+            <div id="delete-error" style="color:#dc3545; font-size:0.85em; margin-top:10px; text-align:center;"></div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cover Letter Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px;
+            background: #1a1a2e;
+            color: #eee;
+            height: 44px;
+            font-size: 0.85em;
+        }
+        .top-nav a { color: #ccc; text-decoration: none; transition: color 0.15s, background 0.15s; }
+        .top-nav a:hover { color: #fff; background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .app-title { font-weight: 700; font-size: 1em; color: #fff !important; letter-spacing: 0.02em; }
+
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+
+        /* Left pane: inputs + YAML editor */
+        .left-pane { width: 50%; display: flex; flex-direction: column; border-right: 1px solid #ccc; background: #f5f5f5; }
+        .input-section { padding: 12px 16px; border-bottom: 1px solid #dee2e6; background: #f8f9fa; }
+        .input-section label { display: block; font-weight: 600; font-size: 0.78em; color: #666; text-transform: uppercase; letter-spacing: 0.03em; margin-top: 8px; margin-bottom: 3px; }
+        .input-section label:first-child { margin-top: 0; }
+        .input-section input, .input-section textarea {
+            width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.88em;
+        }
+        .input-section textarea { resize: vertical; font-family: inherit; }
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+        .btn-row { display: flex; gap: 6px; margin-top: 10px; }
+        .btn-row button { flex: 1; }
+
+        #cl-editor { flex: 1; font-size: 14px; min-height: 200px; }
+
+        .data-panels { border-bottom: 1px solid #dee2e6; background: #f8f9fa; }
+        .data-panel-toggle {
+            padding: 8px 16px; font-size: 0.82em; font-weight: 600; color: #555;
+            cursor: pointer; user-select: none; border-bottom: 1px solid #eee;
+        }
+        .data-panel-toggle:hover { background: #eef; }
+        .data-panel-toggle .dp-arrow {
+            display: inline-block; font-size: 0.7em; transition: transform 0.2s; margin-right: 4px;
+        }
+        .data-panel-body {
+            padding: 8px 16px 10px;
+        }
+        .data-panel-body textarea {
+            width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px;
+            font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82em; line-height: 1.4; resize: vertical;
+        }
+
+        /* Right pane: preview */
+        .right-pane { width: 50%; display: flex; flex-direction: column; background: #fff; }
+        .preview-header {
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85em;
+        }
+        .preview-container {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            background: #525659;
+            display: flex;
+            justify-content: center;
+        }
+        #preview-frame {
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            min-height: 11in;
+            width: 8.5in;
+            border: none;
+            transform-origin: top center;
+        }
+
+        button {
+            padding: 8px 15px; cursor: pointer; background: #007bff; color: white;
+            border: none; border-radius: 4px; font-size: 0.85em;
+            transition: background 0.15s, transform 0.1s;
+        }
+        button:hover { background: #0056b3; }
+        button:active { transform: scale(0.97); }
+
+        .toast-container { position: fixed; top: 16px; right: 16px; z-index: 5000; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 10px 16px; border-radius: 8px; color: #fff; font-size: 0.88em; animation: slideIn 0.3s; }
+        .toast-success { background: #28a745; }
+        .toast-error { background: #dc3545; }
+        .toast-info { background: #17a2b8; }
+        .toast.fade-out { opacity: 0; transition: opacity 0.3s; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .status-bar {
+            padding: 4px 16px;
+            background: #f0f0f0;
+            border-top: 1px solid #ddd;
+            font-size: 0.78em;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3; border-top: 3px solid #3498db;
+            border-radius: 50%; width: 18px; height: 18px;
+            animation: spin 1s linear infinite; display: inline-block; vertical-align: middle;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Top Navigation -->
+<div class="top-nav">
+    <div style="display:flex; align-items:center; gap:16px;">
+        <a href="/" class="app-title" style="text-decoration:none; color:#fff;">Resume Builder</a>
+        <a href="/" style="color:#ccc; text-decoration:none; font-size:0.88em; padding:4px 10px; border-radius:4px;">Resume Editor</a>
+        <span style="color:#fff; font-size:0.88em; padding:4px 10px; border-radius:4px; background:rgba(255,255,255,0.15); font-weight:600;">Cover Letter</span>
+    </div>
+    <div></div>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Left Pane: Inputs + YAML Editor -->
+    <div class="left-pane">
+        <div class="input-section">
+            <div class="input-grid">
+                <div>
+                    <label>Company</label>
+                    <input type="text" id="cl-company" placeholder="e.g. Stripe">
+                </div>
+                <div>
+                    <label>Role</label>
+                    <input type="text" id="cl-role" placeholder="e.g. Backend Engineer">
+                </div>
+            </div>
+            <div class="input-grid">
+                <div>
+                    <label>Hiring Manager (optional)</label>
+                    <input type="text" id="cl-hiring-manager" placeholder="e.g. Jane Smith">
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                    <button onclick="generateCoverLetter()" style="width:100%; background:#e67e22; margin-bottom:0;">Generate</button>
+                </div>
+            </div>
+            <label>Job Description</label>
+            <textarea id="cl-jd" rows="4" placeholder="Paste the job description here..."></textarea>
+        </div>
+
+        <!-- Collapsible data editors -->
+        <div class="data-panels">
+            <div class="data-panel-toggle" onclick="toggleDataPanel('cl-rules-panel', this)">
+                <span class="dp-arrow">&#9654;</span> Cover Letter Rules
+            </div>
+            <div id="cl-rules-panel" class="data-panel-body" style="display:none;">
+                <textarea id="cl-rules-editor" rows="8" placeholder="Loading..."></textarea>
+                <button onclick="saveDataPanel('cover_letter_rules', 'cl-rules-editor')" style="width:100%; margin-top:4px; background:#28a745; padding:5px; font-size:0.82em;">Save Rules</button>
+            </div>
+
+            <div class="data-panel-toggle" onclick="toggleDataPanel('cl-candidate-panel', this)">
+                <span class="dp-arrow">&#9654;</span> Candidate Database
+            </div>
+            <div id="cl-candidate-panel" class="data-panel-body" style="display:none;">
+                <textarea id="cl-candidate-editor" rows="8" placeholder="Loading..."></textarea>
+                <button onclick="saveDataPanel('candidate_database', 'cl-candidate-editor')" style="width:100%; margin-top:4px; background:#28a745; padding:5px; font-size:0.82em;">Save Database</button>
+            </div>
+
+            <div class="data-panel-toggle" onclick="toggleDataPanel('cl-stories-panel', this)">
+                <span class="dp-arrow">&#9654;</span> Cover Letter Database
+            </div>
+            <div id="cl-stories-panel" class="data-panel-body" style="display:none;">
+                <textarea id="cl-stories-editor" rows="8" placeholder="Loading..."></textarea>
+                <button onclick="saveDataPanel('cover_letter_database', 'cl-stories-editor')" style="width:100%; margin-top:4px; background:#28a745; padding:5px; font-size:0.82em;">Save Database</button>
+            </div>
+
+            <div class="data-panel-toggle" onclick="toggleDataPanel('cl-resume-rules-panel', this)">
+                <span class="dp-arrow">&#9654;</span> Resume Rules
+            </div>
+            <div id="cl-resume-rules-panel" class="data-panel-body" style="display:none;">
+                <textarea id="cl-resume-rules-editor" rows="8" placeholder="Loading..."></textarea>
+                <button onclick="saveDataPanel('resume_rules', 'cl-resume-rules-editor')" style="width:100%; margin-top:4px; background:#28a745; padding:5px; font-size:0.82em;">Save Rules</button>
+            </div>
+        </div>
+
+        <!-- YAML Editor -->
+        <div id="cl-editor">{{ default_yaml }}</div>
+    </div>
+
+    <!-- Right Pane: Preview -->
+    <div class="right-pane">
+        <div class="preview-header">
+            <span>Cover Letter Preview</span>
+            <button onclick="downloadPDF()" style="background:#28a745; padding:5px 14px; font-size:0.82em;">Download PDF</button>
+        </div>
+        <div class="preview-container">
+            <iframe id="preview-frame" srcdoc="<p style='color:#999; text-align:center; margin-top:40px;'>Edit the YAML to see a preview.</p>"></iframe>
+        </div>
+    </div>
+</div>
+
+<div class="status-bar">
+    <span id="status-text">Ready</span>
+    <span id="yaml-status"></span>
+</div>
+
+<script>
+    // --- Toast ---
+    function showToast(message, type) {
+        type = type || 'info';
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(function() { toast.classList.add('fade-out'); setTimeout(function() { toast.remove(); }, 300); }, 3500);
+    }
+
+    // --- Ace Editor Setup ---
+    var editor = ace.edit('cl-editor');
+    editor.setTheme('ace/theme/chrome');
+    editor.session.setMode('ace/mode/yaml');
+    editor.setOptions({ fontSize: '14px', showPrintMargin: false, wrap: true, tabSize: 2 });
+
+    var previewTimeout = null;
+    editor.session.on('change', function() {
+        clearTimeout(previewTimeout);
+        previewTimeout = setTimeout(updatePreview, 500);
+        validateYaml();
+    });
+
+    function validateYaml() {
+        try {
+            // Basic YAML validation via preview call
+            var yamlText = editor.getValue().trim();
+            if (!yamlText) {
+                document.getElementById('yaml-status').textContent = '';
+                return;
+            }
+            document.getElementById('yaml-status').textContent = 'YAML OK';
+            document.getElementById('yaml-status').style.color = '#28a745';
+        } catch (e) {
+            document.getElementById('yaml-status').textContent = 'YAML Error';
+            document.getElementById('yaml-status').style.color = '#dc3545';
+        }
+    }
+
+    // --- Preview ---
+    function updatePreview() {
+        var yamlText = editor.getValue().trim();
+        if (!yamlText) return;
+
+        document.getElementById('status-text').textContent = 'Rendering...';
+
+        fetch('/api/cover_letter/preview', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ yaml: yamlText })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                document.getElementById('preview-frame').srcdoc = data.html;
+                document.getElementById('status-text').textContent = 'Preview updated';
+                document.getElementById('yaml-status').textContent = 'YAML OK';
+                document.getElementById('yaml-status').style.color = '#28a745';
+            } else {
+                document.getElementById('status-text').textContent = 'Preview error: ' + (data.message || '');
+                document.getElementById('yaml-status').textContent = 'Error';
+                document.getElementById('yaml-status').style.color = '#dc3545';
+            }
+        })
+        .catch(function(err) {
+            document.getElementById('status-text').textContent = 'Preview failed';
+        });
+    }
+
+    // --- Generate ---
+    function generateCoverLetter() {
+        var company = document.getElementById('cl-company').value.trim();
+        var role = document.getElementById('cl-role').value.trim();
+        var hiringManager = document.getElementById('cl-hiring-manager').value.trim();
+        var jdText = document.getElementById('cl-jd').value.trim();
+
+        if (!company) { showToast('Company name is required', 'error'); return; }
+        if (!jdText) { showToast('Paste a job description first', 'error'); return; }
+
+        document.getElementById('status-text').innerHTML = 'Generating cover letter... <span class="loader"></span>';
+
+        fetch('/api/cover_letter/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                jd_text: jdText,
+                company_name: company,
+                role_title: role,
+                hiring_manager: hiringManager
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                editor.setValue(data.yaml, -1);
+                showToast('Cover letter generated!', 'success');
+                document.getElementById('status-text').textContent = 'Generated for ' + (data.company || company);
+                updatePreview();
+            } else {
+                showToast(data.message || 'Generation failed', 'error');
+                document.getElementById('status-text').textContent = 'Generation failed';
+            }
+        })
+        .catch(function(err) {
+            showToast('Error: ' + err.message, 'error');
+            document.getElementById('status-text').textContent = 'Error';
+        });
+    }
+
+    // --- Download PDF ---
+    function downloadPDF() {
+        var yamlText = editor.getValue().trim();
+        if (!yamlText) { showToast('No cover letter to download', 'error'); return; }
+
+        var company = document.getElementById('cl-company').value.trim();
+
+        fetch('/api/cover_letter/download', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ yaml: yamlText, company_name: company })
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                return response.json().then(function(d) { throw new Error(d.message || 'Download failed'); });
+            }
+            return response.blob();
+        })
+        .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'cover_letter_' + (company.replace(/\s+/g, '_').toLowerCase() || 'draft') + '.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('PDF downloaded', 'success');
+        })
+        .catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    }
+
+    // --- Data panel toggle + load/save ---
+    var _dataPanelLoaded = {};
+    function toggleDataPanel(panelId, toggleEl) {
+        var panel = document.getElementById(panelId);
+        var arrow = toggleEl.querySelector('.dp-arrow');
+        var isHidden = panel.style.display === 'none';
+        panel.style.display = isHidden ? 'block' : 'none';
+        if (arrow) arrow.style.transform = isHidden ? 'rotate(90deg)' : '';
+
+        if (isHidden && !_dataPanelLoaded[panelId]) {
+            _dataPanelLoaded[panelId] = true;
+            var map = {
+                'cl-rules-panel': ['cover_letter_rules', 'cl-rules-editor'],
+                'cl-candidate-panel': ['candidate_database', 'cl-candidate-editor'],
+                'cl-stories-panel': ['cover_letter_database', 'cl-stories-editor'],
+                'cl-resume-rules-panel': ['resume_rules', 'cl-resume-rules-editor'],
+            };
+            var info = map[panelId];
+            if (info) {
+                fetch('/api/settings/' + info[0])
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'success') document.getElementById(info[1]).value = data.content || '';
+                });
+            }
+        }
+    }
+
+    function saveDataPanel(endpoint, textareaId) {
+        var content = document.getElementById(textareaId).value;
+        fetch('/api/settings/' + endpoint, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content: content})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            showToast(data.message || 'Saved', data.status === 'success' ? 'success' : 'error');
+        });
+    }
+
+    // --- Initial preview ---
+    updatePreview();
+</script>
+
+</body>
+</html>

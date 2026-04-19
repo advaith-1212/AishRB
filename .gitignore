@@ -1,0 +1,21 @@
+# User data (per-user directories are private)
+data/*
+!data/defaults/
+versions/
+*.db
+feedback.jsonl
+
+# Uploaded/generated files
+*.pdf
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Encryption key (auto-generated in dev)
+.fernet_key
+
+# OS
+.DS_Store

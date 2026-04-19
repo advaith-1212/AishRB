@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5001:8000"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - SECRET_KEY=local-dev-key
+
+volumes:
+  app-data:

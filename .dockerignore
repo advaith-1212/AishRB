@@ -1,0 +1,13 @@
+data/*
+!data/defaults/
+versions/
+*.db
+*.pdf
+feedback.jsonl
+__pycache__/
+*.pyc
+venv/
+.env
+.DS_Store
+.git/
+.claude/
