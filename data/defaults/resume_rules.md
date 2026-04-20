@@ -3,7 +3,7 @@
 ## Core Principles
 
 ### 1. NEVER Make Up Information
-- Only use content from `CANDIDATE_DATABASE.md`
+- Only use content from `candidate_database.md`
 - Don't fabricate technologies, skills, or experiences
 - Be honest about experience gaps and skill levels
 - Use qualifiers like "learning" or "exposure to" when appropriate
@@ -17,7 +17,7 @@
 
 ### 3. Maintain Accuracy
 - Use actual job titles from experience
-- Include real metrics only (60% deployment reduction, 40% provisioning, 20% cost optimization, 45% MTTR reduction)
+- Include real metrics only (from the candidate database)
 - Don't exaggerate or inflate roles
 - Be truthful about project scope (48-hour hackathons vs. production systems)
 
@@ -49,12 +49,11 @@
 3. **Learning Gaps** - Skills candidate can acquire quickly
 4. **Hard Gaps** - Missing expertise that takes years to build
 
-**Focus Areas:**
-- Primary programming languages (Python, Java, TypeScript)
-- Cloud platforms (Azure primary, AWS secondary)
-- Infrastructure tools (Terraform, Kubernetes, Helm, Ansible)
-- DevOps practices (CI/CD, GitLab CI, monitoring)
-- Domain experience (banking/fintech, healthcare, data engineering)
+**Focus Areas (adapt to each candidate):**
+- Primary programming languages from candidate database
+- Cloud platforms and infrastructure tools
+- DevOps practices (CI/CD, monitoring)
+- Domain experience relevant to the JD
 
 ### Step 3: Rewrite Bullet Points
 
@@ -65,7 +64,7 @@
 
 **Examples:**
 - Good: "Architected data pipelines using Python and Terraform reducing processing time by 60%"
-- Good: "Engineered CI/CD system with GitLab CI automating 40+ microservice deployments"
+- Good: "Engineered CI/CD system with GitHub Actions automating 20+ service deployments"
 - Bad: "Worked on infrastructure" (too vague)
 - Bad: "Built world-class production-grade systems" (marketing fluff)
 
@@ -102,7 +101,6 @@
 - Mirror JD's role title when appropriate (e.g., "Platform Engineer" vs "DevOps Engineer")
 - Lead with skills most relevant to JD
 - Include domain experience if JD is industry-specific
-- Mention MEng only if relevant to role (technical depth, research, ML focus)
 
 #### B. Skills Section
 
@@ -138,8 +136,8 @@ For ML/Data Roles:
 #### C. Experience Section
 
 **Job Entry Format:**
-- 10-12 bullets max for primary role, prioritized by JD relevance
-- 2-3 bullets for graduate role
+- 8-12 bullets for primary/longest role, prioritized by JD relevance
+- 2-4 bullets for shorter or earlier roles
 
 **Bullet Point Rules:**
 - First 3-4 bullets: Most relevant to JD (use their keywords)
@@ -161,10 +159,10 @@ For ML/Data Roles:
 #### D. Projects Section
 
 **Project Selection Rules:**
-1. Never include ThoughtWorks work in projects - that goes in Experience
+1. Never include full-time work experience in projects -- that goes in Experience
 2. Pick 3-4 most relevant projects to the JD
 3. Order by relevance to role, not chronologically
-4. Academic projects are valid (MiniTorch, ColorEdit-Flux)
+4. Academic projects are valid
 5. Hackathon projects are valid but don't oversell
 
 **Project Entry Format:**
@@ -178,25 +176,19 @@ For ML/Data Roles:
 - Don't call hackathon work "production-grade"
 - Do highlight relevant technical depth
 
-**Project Reordering Examples:**
-- For ML Role: MiniTorch -> ColorEdit-Flux -> CTCC -> Dan.ai
-- For Backend Role: Dan.ai -> Pitchbox -> CTCC -> MiniTorch
-- For DevOps Role: Pitchbox -> Dan.ai -> CTCC
-- For Data Role: CTCC -> MiniTorch -> Dan.ai
-- For AI Safety/LLM Role: FairSight -> Dan.ai -> SeeMeThru
+**Project Reordering:** Order projects by relevance to the JD. For example, if applying to an ML role, put ML projects first. If applying to a backend role, put backend/API projects first.
 
 #### E. Education & Extracurricular
 
 **Coursework Selection:**
 - Pick courses that align with JD requirements
-- ML role -> Machine Learning Engineering, Deep Learning
-- Systems role -> Distributed Systems, System Design
-- Data role -> Data Processing, Machine Learning Engineering
+- ML role -> ML, Deep Learning courses
+- Systems role -> Distributed Systems, System Design courses
+- Data role -> Data Processing, Database courses
 
 **Extracurricular:**
 - Keep to 2-3 bullets max
-- Include leadership if relevant (AARUUSH committee lead)
-- Include current role (Future Founders Treasurer)
+- Include leadership roles if relevant
 - Only include if demonstrates relevant skills
 
 #### F. ATS Scoring
@@ -231,48 +223,48 @@ For ML/Data Roles:
 
 ### YAML Structure
 ```yaml
-name: Aishwarya Birla
+name: [Full Name]
 contact:
-  location: New York, NY
-  phone: +1 646-244-9594
-  email: ab3347@cornell.edu
-  github: https://github.com/birlaaishwarya11
-  linkedin: https://www.linkedin.com/in/aishwarya-birla/
-  portfolio_label: Portfolio
-  portfolio_url: https://aishwaryabirla.lovable.app/
+  location: [City, State]
+  phone: [Phone Number]
+  email: [Email]
+  github: [GitHub URL]
+  linkedin: [LinkedIn URL]
+  portfolio_label: Portfolio        # optional
+  portfolio_url: [Portfolio URL]    # optional
 
 summary: [3-line tailored summary]
 
 education:
-- institution: Cornell Tech, Cornell University
-  location: New York, NY
-  degree: MEng in Computer Science
-  gpa: '3.9'
-  date: May 2026
+- institution: [University Name]
+  location: [City, State]
+  degree: [Degree Name]
+  gpa: '[GPA]'
+  date: [Graduation Date]
   coursework: [1-3 most relevant courses to JD]
-- institution: SRM Institute of Science & Technology
-  location: Chennai, India
-  degree: BTech in Computer Science Engineering
-  gpa: '4.0'
-  date: May 2022
+- institution: [Previous University]
+  location: [City, Country]
+  degree: [Degree Name]
+  gpa: '[GPA]'
+  date: [Graduation Date]
 
 technical_skills:
 - category: [JD-relevant category name]
   skills: [Comma-separated skills, JD keywords first]
 
 experience:
-- company: ThoughtWorks
-  role: [Actual title matching JD focus]
-  location: Pune, India
-  date: July 2022 - May 2025
+- company: [Company Name]
+  role: [Actual Title]
+  location: [City, State/Country]
+  date: [Start] - [End]
   bullets:
-  - [10-12 bullets prioritized by JD relevance]
-- company: ThoughtWorks
-  role: [Graduate title]
-  location: Pune, India
-  date: March 2022 - June 2022
+  - "[Action verb] + [what] + [tech] + [result]"
+- company: [Previous Company]
+  role: [Title]
+  location: [City, State/Country]
+  date: [Start] - [End]
   bullets:
-  - [2-3 bullets]
+  - "[Bullet 1]"
 
 projects:
 - name: [Project Name]
@@ -280,11 +272,11 @@ projects:
   award: [If applicable]
   date: [Date]
   bullets:
-  - [3-5 bullets]
+  - "[3-5 bullets]"
 
 extracurricular:
   bullets:
-  - [2-3 leadership/community bullets]
+  - "[2-3 leadership/community bullets]"
 ```
 
 ### Assessment Comments (after YAML)
